@@ -267,7 +267,9 @@ HTTP `/healthz` handler реализован в `internal/transport/http/`, не
 
 ## Implementation Log
 
-**2026-06-10 (revision)** — Введено правило Clean Architecture для всех Go-сервисов. Оба сервиса рефакторены:
+**2026-06-10 (revision 2)** — Добавлены README.md в все placeholder-директории обоих сервисов (`domain/`, `usecase/`, `transport/kafka/`, `transport/grpc/`, `storage/postgres/`, `storage/memory/`) — 12 файлов. Архитектурный скелет теперь зафиксирован в репозитории. Проверены: `go work sync`, `make test`, `make up`, оба `/healthz`, `check-postgis`, Kafka exec, `make down` — все OK. main.go проверен: handlers и бизнес-логика отсутствуют.
+
+**2026-06-10 (revision 1)** — Введено правило Clean Architecture для всех Go-сервисов. Оба сервиса рефакторены:
 - `cmd/gateway/` → `cmd/tracking-gateway/`; `cmd/worker/` → `cmd/tracking-worker/`
 - Добавлены `internal/app/`, `internal/config/`, `internal/transport/http/`, `internal/domain/`, `internal/usecase/`, `internal/storage/` (placeholder dirs)
 - `main.go` — только composition root (config → app → run → shutdown)
@@ -323,5 +325,33 @@ HTTP `/healthz` handler реализован в `internal/transport/http/`, не
 - `alpine:3.19` + `curl` в финальном образе — необходим для Docker Compose healthcheck
 - `make test` вызывает `go test` явно по каждому сервису, не через `go work`
 - Go service foundation сделан под Clean Architecture: transport → usecase → domain, storage → usecase interfaces
+
+**Changed Files (final):**
+- `services/tracking-gateway/internal/domain/README.md` (new)
+- `services/tracking-gateway/internal/usecase/README.md` (new)
+- `services/tracking-gateway/internal/transport/kafka/README.md` (new)
+- `services/tracking-gateway/internal/transport/grpc/README.md` (new)
+- `services/tracking-gateway/internal/storage/postgres/README.md` (new)
+- `services/tracking-gateway/internal/storage/memory/README.md` (new)
+- `services/tracking-worker/internal/domain/README.md` (new)
+- `services/tracking-worker/internal/usecase/README.md` (new)
+- `services/tracking-worker/internal/transport/kafka/README.md` (new)
+- `services/tracking-worker/internal/transport/grpc/README.md` (new)
+- `services/tracking-worker/internal/storage/postgres/README.md` (new)
+- `services/tracking-worker/internal/storage/memory/README.md` (new)
+
+**Test Results:**
+- `go work sync` — OK
+- `go test ./...` tracking-gateway — OK (`internal/transport/http` pass)
+- `go test ./...` tracking-worker — OK (`internal/transport/http` pass)
+- `curl localhost:8080/healthz` — `{"status":"ok"}`
+- `curl localhost:8081/healthz` — `{"status":"ok"}`
+- `make check-postgis` — PostGIS 3.4 USE_GEOS=1 USE_PROJ=1 USE_STATS=1
+- `docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --list` — OK (no host port)
+- `make down` — all containers stopped cleanly
+
+**Remaining Risks:**
+- `transport/grpc/` placeholder — gRPC не будет использоваться в ближайших эпиках; директория зарезервирована
+- Makefile `make check-postgis` использует `$${}` для env vars — корректно работает только при наличии `.env`; нужно документировать при онбординге
 
 **Следующий шаг:** EPIC 2 — Auth & Device Registration.
