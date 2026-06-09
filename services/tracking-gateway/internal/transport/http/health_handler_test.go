@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ func TestHealthzHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
 
-	healthzHandler(w, req)
+	HealthzHandler(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)

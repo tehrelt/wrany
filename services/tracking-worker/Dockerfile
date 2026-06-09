@@ -3,7 +3,7 @@ WORKDIR /app
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build -o worker ./cmd/tracking-worker
 
 FROM alpine:3.19
 RUN apk add --no-cache curl

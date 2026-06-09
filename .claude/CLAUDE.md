@@ -175,6 +175,53 @@ Avoid:
 
 ---
 
+## Go Service Architecture
+
+All Go services must follow Clean Architecture / Hexagonal Architecture.
+
+### Mandatory directory structure
+
+```
+services/<service-name>/
+  cmd/<service-name>/main.go        # composition root only
+  internal/
+    app/app.go                      # wires everything, manages lifecycle
+    config/config.go                # loads env vars
+    domain/                         # types, entities, errors — no external deps
+    usecase/                        # business logic — no transport/storage deps
+    transport/
+      http/                         # HTTP handlers and router
+      kafka/                        # Kafka consumers/producers
+      grpc/                         # gRPC handlers
+    storage/
+      postgres/                     # Postgres implementations
+      memory/                       # In-memory implementations
+```
+
+### Dependency direction
+
+```
+transport → usecase → domain
+storage   → usecase interfaces / domain
+cmd/app   → wires everything together
+```
+
+### Rules
+
+- `cmd/<service-name>/main.go` is composition root only:
+  load config → init logger → build app → run → graceful shutdown.
+- No handlers or business logic in `main.go`.
+- HTTP handlers live in `internal/transport/http/`.
+- Kafka adapters live in `internal/transport/kafka/`.
+- gRPC handlers live in `internal/transport/grpc/`.
+- Usecases live in `internal/usecase/`. Must not import transport or driver types.
+- Storage implementations live in `internal/storage/<name>/`.
+- Domain types/entities/errors live in `internal/domain/`. No external dependencies.
+- Transport layer must not contain business logic.
+- Storage layer must not contain business logic.
+
+---
+
 ## Initial Epic List
 
 1. Project Foundation
@@ -195,3 +242,17 @@ Avoid:
 16. MVP Hardening
 
 Start with EPIC 1 only.
+
+Before starting any epic, Claude must read .claude/EPICS.md.
+
+Claude must use .claude/EPICS.md as the source of truth for:
+
+- epic goal;
+- scope;
+- out of scope;
+- dependencies;
+- acceptance criteria;
+- expected deliverables.
+
+Claude must not invent epic scope if it is not described in .claude/EPICS.md.
+If the epic description is not detailed enough, Claude must stop and ask the user for clarification before writing code.

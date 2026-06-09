@@ -175,6 +175,31 @@ make test         # тесты по каждому Go-сервису явно:
 - `.env.example` — единственный источник правды по переменным окружения. `.env` в `.gitignore`.
 - `.dockerignore` добавляется в каждый Go-сервис для исключения лишних файлов из build context.
 
+### Go Service Structure (Clean Architecture)
+
+Все Go-сервисы следуют Clean Architecture / Hexagonal Architecture:
+
+```
+services/<service-name>/
+  cmd/<service-name>/main.go        # composition root only
+  internal/
+    app/app.go                      # lifecycle management
+    config/config.go                # env var loading
+    domain/                         # entities, errors (no external deps)
+    usecase/                        # business logic (no transport/driver deps)
+    transport/
+      http/                         # HTTP handlers + router
+      kafka/                        # Kafka adapters
+      grpc/                         # gRPC handlers
+    storage/
+      postgres/
+      memory/
+```
+
+Dependency direction: `transport → usecase → domain`, `storage → usecase interfaces`.
+`main.go` только: load config → init logger → build app → run → graceful shutdown.
+HTTP `/healthz` handler реализован в `internal/transport/http/`, не в `main.go`.
+
 ## Tasks
 
 - [ ] T01: Создать структуру директорий (`services/tracking-gateway`, `services/tracking-worker`, `apps/android-tracker`, `apps/web`, `infra/docker/postgres`)
@@ -242,6 +267,16 @@ make test         # тесты по каждому Go-сервису явно:
 
 ## Implementation Log
 
+**2026-06-10 (revision)** — Введено правило Clean Architecture для всех Go-сервисов. Оба сервиса рефакторены:
+- `cmd/gateway/` → `cmd/tracking-gateway/`; `cmd/worker/` → `cmd/tracking-worker/`
+- Добавлены `internal/app/`, `internal/config/`, `internal/transport/http/`, `internal/domain/`, `internal/usecase/`, `internal/storage/` (placeholder dirs)
+- `main.go` — только composition root (config → app → run → shutdown)
+- HTTP `/healthz` перенесён в `internal/transport/http/health_handler.go` + `router.go`
+- Тесты перенесены в `internal/transport/http/health_handler_test.go`
+- Dockerfiles обновлены под новые build-пути
+- `.claude/CLAUDE.md` обновлён: добавлено обязательное правило Go Clean Architecture
+- Все тесты зелёные, все сервисы `healthy` после пересборки
+
 **2026-06-10** — Создана структура директорий: `services/tracking-gateway`, `services/tracking-worker`, `apps/android-tracker`, `apps/web`, `infra/docker/postgres`.
 
 **2026-06-10** — Написан `docker-compose.yml`: postgres (postgis/postgis:16-3.4), kafka (apache/kafka:3.7.0 KRaft), tracking-gateway, tracking-worker. Kafka не пробрасывается на host. Все сервисы с healthcheck и `depends_on: condition: service_healthy`.
@@ -270,16 +305,23 @@ make test         # тесты по каждому Go-сервису явно:
 - Docker Compose с 4 сервисами, все `healthy` при старте
 - Kafka 3.7.0 в KRaft mode, только внутри `wrany-net`
 - PostgreSQL 16 + PostGIS 3.4, инициализирован через `init.sql`
-- Go-стабы `tracking-gateway` (:8080) и `tracking-worker` (:8081) с `/healthz`
-- Unit-тесты для обоих стабов — все зелёные
+- Go-сервисы `tracking-gateway` (:8080) и `tracking-worker` (:8081) по **Clean Architecture**:
+  - `cmd/<service>/main.go` — composition root only
+  - `internal/app/` — lifecycle management
+  - `internal/config/` — env var loading
+  - `internal/transport/http/` — HTTP handler + router
+  - `internal/domain/`, `internal/usecase/`, `internal/storage/` — placeholder dirs для будущих эпиков
+- Unit-тесты в `internal/transport/http/` — зелёные
 - `go.work` для Go workspaces
 - Makefile с 7 командами
 - `.dockerignore` для обоих Go-сервисов
 - README для корня, сервисов и приложений
+- `CLAUDE.md` обновлён: обязательное правило Go Clean Architecture для всего проекта
 
 **Решения и компромиссы:**
-- `apache/kafka:3.7.0` вместо bitnami — официальный образ, KRaft без Zookeeper
+- `apache/kafka:3.7.0` — официальный образ, KRaft без Zookeeper
 - `alpine:3.19` + `curl` в финальном образе — необходим для Docker Compose healthcheck
 - `make test` вызывает `go test` явно по каждому сервису, не через `go work`
+- Go service foundation сделан под Clean Architecture: transport → usecase → domain, storage → usecase interfaces
 
 **Следующий шаг:** EPIC 2 — Auth & Device Registration.
