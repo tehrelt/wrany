@@ -34,3 +34,5 @@ android/app/build/
 # Claude local/private files
 CLAUDE.local.md
 .claude/settings.local.json.env
+
+.serena/
