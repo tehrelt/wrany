@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Done
 
 ## Goal
 
@@ -371,8 +371,32 @@ Down-миграции нужны для локальной разработки.
 
 ## Implementation Log
 
-_Пусто. Заполняется после начала реализации._
+- Созданы SQL-миграции: `0001_create_users`, `0002_create_devices`, `0003_create_refresh_tokens`
+- Реализован domain-слой: `User`, `Device`, `RefreshToken` entities + sentinel-ошибки
+- Реализованы postgres-репозитории: `UserRepo`, `DeviceRepo`, `TokenRepo` (pgx/v5, без GORM)
+- Реализованы usecases: `AuthUsecase` (Register/Login/Refresh с revoke-моделью), `DeviceUsecase` (Upsert), `MeUsecase`
+- Реализован JWT middleware + `UserIDFromContext` (unexported type-safe ключ)
+- Реализованы HTTP-хендлеры: auth, device, me
+- Обновлён router с JWT-protected маршрутами
+- Обновлён config (JWT_SECRET, JWT_ACCESS_TTL, JWT_REFRESH_TTL)
+- Обновлён app.go — wire через pgxpool
+- Добавлен Dockerfile + entrypoint.sh (migration step перед стартом)
+- Добавлены Makefile-команды: `migrate-up`, `migrate-down`, `migrate-version`
+- Написаны unit-тесты usecase (17 тестов, mock-репозитории)
+- Написаны integration-тесты handlers (10 тестов, testcontainers-postgres/postgis)
+- Исправлен wait strategy для testcontainers на Windows: `WithOccurrence(2)` + DSN `127.0.0.1`
 
 ## Final Report
 
-_Пусто. Заполняется после завершения эпика._
+EPIC 02 завершён. Все acceptance criteria выполнены:
+
+- Register/Login/Refresh endpoints работают корректно
+- bcrypt cost=12, plain-text нигде не хранится
+- email нормализуется (lowercase + trim) перед сохранением
+- JWT claims: только `sub`, `iat`, `exp`
+- Refresh token revoke-модель: rotate при каждом refresh, повторное использование → 401
+- Device upsert по `(user_id, device_id)`, дублей нет
+- `JWT_SECRET` обязателен, сервис не стартует без него
+- Migration tool: `golang-migrate/migrate/v4`, миграции применяются в entrypoint контейнера
+- `go test ./...` проходит без ошибок (unit + integration)
+- `tracking-worker` не затронут
