@@ -5,19 +5,42 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/wrany/tracking-gateway/internal/config"
+	"github.com/wrany/tracking-gateway/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-gateway/internal/transport/http"
+	"github.com/wrany/tracking-gateway/internal/usecase"
 )
 
 type App struct {
 	srv *http.Server
 }
 
-func New(cfg config.Config) *App {
+func New(cfg config.Config, db *pgxpool.Pool) *App {
+	userRepo := postgres.NewUserRepo(db)
+	deviceRepo := postgres.NewDeviceRepo(db)
+	tokenRepo := postgres.NewTokenRepo(db)
+
+	authUC := usecase.NewAuthUsecase(userRepo, tokenRepo, usecase.AuthConfig{
+		JWTSecret:  []byte(cfg.JWTSecret),
+		AccessTTL:  cfg.JWTAccessTTL,
+		RefreshTTL: cfg.JWTRefreshTTL,
+	})
+	deviceUC := usecase.NewDeviceUsecase(deviceRepo)
+	meUC := usecase.NewMeUsecase(userRepo)
+
+	router := httptransport.NewRouter(httptransport.RouterDeps{
+		Auth:      authUC,
+		Device:    deviceUC,
+		Me:        meUC,
+		JWTSecret: []byte(cfg.JWTSecret),
+	})
+
 	return &App{
 		srv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: httptransport.NewRouter(),
+			Handler: router,
 		},
 	}
 }
