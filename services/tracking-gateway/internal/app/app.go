@@ -34,29 +34,22 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	deviceUC := usecase.NewDeviceUsecase(deviceRepo)
 	meUC := usecase.NewMeUsecase(userRepo)
 
-	// NATS JetStream publisher — optional at startup (may be absent in unit test envs).
-	var natsBus *natseventbus.Bus
-	if cfg.NatsURL != "" {
-		bus, err := natseventbus.Connect(natseventbus.Config{
-			URL:    cfg.NatsURL,
-			Stream: cfg.NatsStream,
-		})
-		if err != nil {
-			log.Fatalf("nats: connect: %v", err)
-		}
-		if err := bus.EnsureStream(context.Background()); err != nil {
-			log.Fatalf("nats: ensure stream: %v", err)
-		}
-		natsBus = bus
-		log.Printf("nats: connected to %s stream=%s", cfg.NatsURL, cfg.NatsStream)
-	} else {
-		log.Println("nats: NATS_URL not set — tracker WebSocket endpoint will return EVENT_BUS_UNAVAILABLE")
+	if cfg.NatsURL == "" {
+		log.Fatal("nats: NATS_URL is required — set NATS_URL to connect to JetStream")
 	}
-
-	var pub eventbus.Publisher = eventbus.NopPublisher{}
-	if natsBus != nil {
-		pub = natsBus
+	bus, err := natseventbus.Connect(natseventbus.Config{
+		URL:    cfg.NatsURL,
+		Stream: cfg.NatsStream,
+	})
+	if err != nil {
+		log.Fatalf("nats: connect: %v", err)
 	}
+	if err := bus.EnsureStream(context.Background()); err != nil {
+		log.Fatalf("nats: ensure stream: %v", err)
+	}
+	natsBus := bus
+	log.Printf("nats: connected to %s stream=%s", cfg.NatsURL, cfg.NatsStream)
+	var pub eventbus.Publisher = natsBus
 
 	trackerUC := usecase.NewTrackerIngestionUseCase(
 		deviceRepo,
