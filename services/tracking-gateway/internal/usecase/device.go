@@ -12,6 +12,7 @@ import (
 type DeviceRepository interface {
 	Upsert(ctx context.Context, device *domain.Device) error
 	ListByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Device, error)
+	FindByUserAndDeviceID(ctx context.Context, userID, deviceID uuid.UUID) (*domain.Device, error)
 }
 
 type DeviceUsecase struct {

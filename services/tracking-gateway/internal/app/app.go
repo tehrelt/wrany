@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/wrany/libs/eventbus"
+	natseventbus "github.com/wrany/libs/eventbus/nats"
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-gateway/internal/transport/http"
@@ -14,13 +16,15 @@ import (
 )
 
 type App struct {
-	srv *http.Server
+	srv     *http.Server
+	natsBus *natseventbus.Bus
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
 	userRepo := postgres.NewUserRepo(db)
 	deviceRepo := postgres.NewDeviceRepo(db)
 	tokenRepo := postgres.NewTokenRepo(db)
+	dedupRepo := postgres.NewIngestionDedupRepo(db)
 
 	authUC := usecase.NewAuthUsecase(userRepo, tokenRepo, usecase.AuthConfig{
 		JWTSecret:  []byte(cfg.JWTSecret),
@@ -30,11 +34,38 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	deviceUC := usecase.NewDeviceUsecase(deviceRepo)
 	meUC := usecase.NewMeUsecase(userRepo)
 
+	if cfg.NatsURL == "" {
+		log.Fatal("nats: NATS_URL is required — set NATS_URL to connect to JetStream")
+	}
+	bus, err := natseventbus.Connect(natseventbus.Config{
+		URL:    cfg.NatsURL,
+		Stream: cfg.NatsStream,
+	})
+	if err != nil {
+		log.Fatalf("nats: connect: %v", err)
+	}
+	if err := bus.EnsureStream(context.Background()); err != nil {
+		log.Fatalf("nats: ensure stream: %v", err)
+	}
+	natsBus := bus
+	log.Printf("nats: connected to %s stream=%s", cfg.NatsURL, cfg.NatsStream)
+	var pub eventbus.Publisher = natsBus
+
+	trackerUC := usecase.NewTrackerIngestionUseCase(
+		deviceRepo,
+		dedupRepo,
+		pub,
+		"tracking-gateway",
+		cfg.WSMaxBatchSize,
+	)
+
 	router := httptransport.NewRouter(httptransport.RouterDeps{
 		Auth:      authUC,
 		Device:    deviceUC,
 		Me:        meUC,
+		Tracker:   trackerUC,
 		JWTSecret: []byte(cfg.JWTSecret),
+		Config:    cfg,
 	})
 
 	return &App{
@@ -42,6 +73,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 			Addr:    ":" + cfg.Port,
 			Handler: router,
 		},
+		natsBus: natsBus,
 	}
 }
 
@@ -55,5 +87,13 @@ func (a *App) Run() error {
 
 func (a *App) Shutdown(ctx context.Context) error {
 	log.Println("tracking-gateway shutting down")
-	return a.srv.Shutdown(ctx)
+	if err := a.srv.Shutdown(ctx); err != nil {
+		return err
+	}
+	if a.natsBus != nil {
+		if err := a.natsBus.Close(); err != nil {
+			log.Printf("nats: close: %v", err)
+		}
+	}
+	return nil
 }

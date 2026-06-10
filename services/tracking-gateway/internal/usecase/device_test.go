@@ -54,6 +54,14 @@ func (m *mockDeviceRepo) ListByUserID(_ context.Context, userID uuid.UUID) ([]*d
 	return result, nil
 }
 
+func (m *mockDeviceRepo) FindByUserAndDeviceID(_ context.Context, userID, deviceID uuid.UUID) (*domain.Device, error) {
+	k := m.key(userID, deviceID)
+	if d, ok := m.devices[k]; ok {
+		return d, nil
+	}
+	return nil, domain.ErrDeviceNotFound
+}
+
 // --- tests ---
 
 func TestDeviceUsecase_RegisterDevice_Success(t *testing.T) {

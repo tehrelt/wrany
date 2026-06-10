@@ -6,6 +6,7 @@ package eventbus
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/wrany/libs/events"
 )
@@ -21,4 +22,12 @@ var ErrPublish = errors.New("eventbus: publish failed")
 // shutdown) is planned for the epic that introduces the first real consumer.
 type Publisher interface {
 	Publish(ctx context.Context, subject string, event events.Envelope) error
+}
+
+// NopPublisher is a Publisher that always returns ErrPublish.
+// Used when no broker is configured (e.g. local dev without NATS_URL).
+type NopPublisher struct{}
+
+func (NopPublisher) Publish(_ context.Context, _ string, _ events.Envelope) error {
+	return fmt.Errorf("%w: no broker configured", ErrPublish)
 }
