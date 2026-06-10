@@ -28,19 +28,15 @@ test:
 	cd services/tracking-worker && go test ./...
 
 # NATS JetStream
-# CLI commands run in a disposable nats-box container — no host install needed.
-COMPOSE_NETWORK := wrany_wrany-net
-NATS_BOX := docker run --rm --network $(COMPOSE_NETWORK) natsio/nats-box:latest
-NATS_SERVER := nats://nats:4222
+# All commands use `docker compose exec nats` — no hardcoded network names.
 
 nats-check:
 	docker compose exec nats wget -q -O - 'http://localhost:8222/healthz?js-enabled-only=true'
 
 nats-streams:
-	docker compose exec nats wget -qO- 'http://localhost:8222/jsz?streams=1' | python3 -m json.tool 2>/dev/null || \
 	docker compose exec nats wget -qO- 'http://localhost:8222/jsz?streams=1'
 
-# Creates (or updates) the WRANY_EVENTS stream via the Go adapter — no nats CLI needed.
+# Creates (or updates) the WRANY_EVENTS stream via the Go adapter.
 # Requires NATS to be up (make up first).
 nats-init:
 	cd libs/eventbus && NATS_URL=nats://127.0.0.1:4222 go test -tags integration -run TestEnsureStream_Idempotent -v ./nats/...
