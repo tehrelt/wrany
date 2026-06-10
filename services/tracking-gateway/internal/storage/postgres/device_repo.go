@@ -33,6 +33,25 @@ func (r *DeviceRepo) Upsert(ctx context.Context, d *domain.Device) error {
 	return err
 }
 
+func (r *DeviceRepo) FindByUserAndDeviceID(ctx context.Context, userID, deviceID uuid.UUID) (*domain.Device, error) {
+	d := &domain.Device{}
+	err := r.db.QueryRow(ctx, `
+		SELECT id, user_id, device_id, name, platform, last_seen_at, created_at, updated_at
+		FROM devices WHERE user_id = $1 AND device_id = $2
+	`, userID, deviceID).Scan(
+		&d.ID, &d.UserID, &d.DeviceID,
+		&d.Name, &d.Platform,
+		&d.LastSeenAt, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		if isNotFound(err) {
+			return nil, domain.ErrDeviceNotFound
+		}
+		return nil, err
+	}
+	return d, nil
+}
+
 func (r *DeviceRepo) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Device, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, user_id, device_id, name, platform, last_seen_at, created_at, updated_at

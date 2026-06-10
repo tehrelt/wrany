@@ -205,6 +205,58 @@ Requires EPIC 1 and EPIC 2 to be completed.
 
 ---
 
+# EPIC 04: WebSocket Tracker Protocol & Gateway Ingestion
+
+## Goal
+
+Implement WebSocket endpoint in `tracking-gateway` that accepts location events from the Android tracker client, validates user/device/batch, and publishes accepted events to NATS JetStream `location.events.v1`.
+
+## Scope
+
+- `GET /v1/ws/tracker` with JWT auth before upgrade
+- WebSocket protocol: `session.start`, `session.accepted`, `location.batch`, `location.batch.ack`, `error`, `ping`, `pong`
+- Device ownership validation (uses EPIC 2 DeviceRepo)
+- Per-event batch validation (lat/lon, accuracy, activity_type, optional fields)
+- Dedup ledger: `ingested_location_events` with PK `(user_id, device_id, event_id)`
+- Dedup strategy: publish-first (variant B), ON CONFLICT DO NOTHING after PubAck
+- NATS JetStream publish via `libs/eventbus.Publisher`
+- ACK to client only after successful JetStream PubAck
+- Origin policy: empty origin allowed (mobile), browser origins via allowlist
+- Migration `0004_create_ingested_location_events`
+
+## Out of Scope
+
+- Android background tracking
+- Android SQLite queue / SyncManager
+- tracking-worker NATS consumer
+- TripDetectionEngine
+- Raw GPS points persistence
+- Route matching, analytics API, web client
+- Loop detection, manual correction
+
+## Dependencies
+
+Requires EPIC 1, EPIC 2, EPIC 3.
+
+## Acceptance Criteria
+
+- `GET /v1/ws/tracker` exists
+- Without JWT → 401 before upgrade
+- `session.start` required before `location.batch`
+- Device validated against authenticated user
+- Unknown device → `DEVICE_NOT_REGISTERED`
+- Batch validation works (lat/lon, accuracy, activity_type, optionals)
+- Batch size limit 100 events (usecase layer)
+- Message size limit 256 KB (transport layer)
+- Accepted events published to `location.events.v1`
+- ACK only after PubAck
+- NATS unavailable → `EVENT_BUS_UNAVAILABLE`
+- Duplicate `(user_id, device_id, event_id)` → `duplicated`, not republished
+- Conflict on ledger insert after PubAck is non-fatal
+- `make test` passes
+
+---
+
 # RESCHEDULED: Android Background Location Tracking
 
 > Formerly EPIC 03. Rescheduled by EPIC 03 (Event Bus Contracts & NATS JetStream Foundation).

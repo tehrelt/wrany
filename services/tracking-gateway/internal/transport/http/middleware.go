@@ -19,6 +19,11 @@ func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
+// WithUserID injects a user ID into a context. Used in tests to bypass AuthMiddleware.
+func WithUserID(ctx context.Context, userID uuid.UUID) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
 // AuthMiddleware validates the Bearer JWT and injects userID into the request context.
 func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
