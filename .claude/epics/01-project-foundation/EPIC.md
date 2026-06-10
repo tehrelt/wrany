@@ -1,5 +1,8 @@
 # EPIC 01: Project Foundation
 
+> **Superseded by EPIC 03: Event Bus changed from Kafka to NATS JetStream.**
+> Kafka references below are historical context of the original solution and are intentionally not rewritten.
+
 ## Status
 
 Done

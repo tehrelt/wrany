@@ -1,6 +1,6 @@
 # tracking-worker
 
-Go background worker service. Consumes location events from Kafka and runs trip detection, route matching, and personal record logic.
+Go background worker service. Consumes location events from NATS JetStream and runs trip detection, route matching, and personal record logic.
 
 ## Port
 
