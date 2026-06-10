@@ -37,10 +37,13 @@ nats-check:
 	docker compose exec nats wget -q -O - 'http://localhost:8222/healthz?js-enabled-only=true'
 
 nats-streams:
-	$(NATS_BOX) nats --server $(NATS_SERVER) stream ls
+	docker compose exec nats wget -qO- 'http://localhost:8222/jsz?streams=1' | python3 -m json.tool 2>/dev/null || \
+	docker compose exec nats wget -qO- 'http://localhost:8222/jsz?streams=1'
 
+# Creates (or updates) the WRANY_EVENTS stream via the Go adapter — no nats CLI needed.
+# Requires NATS to be up (make up first).
 nats-init:
-	$(NATS_BOX) sh -c "nats --server $(NATS_SERVER) stream info WRANY_EVENTS >/dev/null 2>&1 || nats --server $(NATS_SERVER) stream add WRANY_EVENTS --subjects 'location.events.*,trip.*,route.*,dead-letter.*' --storage file --retention limits --discard old --dupe-window 2m --replicas 1 --defaults"
+	cd libs/eventbus && NATS_URL=nats://127.0.0.1:4222 go test -tags integration -run TestEnsureStream_Idempotent -v ./nats/...
 
 # Migrations (tracking-gateway)
 # Requires: migrate CLI — https://github.com/golang-migrate/migrate
