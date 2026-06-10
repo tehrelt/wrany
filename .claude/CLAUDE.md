@@ -20,13 +20,16 @@ Architecture:
 - Web analytics client: React
 - Backend services: Go
 - Tracker client to backend transport: WebSocket only
-- Backend internal event bus: Kafka
+- Backend internal event bus: NATS JetStream (Kafka/Redpanda remain possible future adapters)
 - Storage: Postgres + PostGIS
 
-Kafka must never be exposed to external clients.
+NATS JetStream must never be exposed to external clients.
+
+Backend code must not depend on a specific broker: services use the shared
+`Publisher` abstraction (`libs/eventbus`) and event contracts (`libs/events`).
 
 The Android tracker sends location data to the backend through WebSocket.
-The backend sends ACK only after accepted events are successfully written to Kafka.
+The backend sends ACK only after accepted events are successfully written to NATS JetStream.
 Backend workers make final decisions about trip detection, route matching, and best laps.
 
 ---
@@ -191,7 +194,7 @@ services/<service-name>/
     usecase/                        # business logic — no transport/storage deps
     transport/
       http/                         # HTTP handlers and router
-      kafka/                        # Kafka consumers/producers
+      nats/                         # NATS JetStream consumers/publishers
       grpc/                         # gRPC handlers
     storage/
       postgres/                     # Postgres implementations
@@ -212,8 +215,9 @@ cmd/app   → wires everything together
   load config → init logger → build app → run → graceful shutdown.
 - No handlers or business logic in `main.go`.
 - HTTP handlers live in `internal/transport/http/`.
-- Kafka adapters live in `internal/transport/kafka/`.
+- NATS adapters live in `internal/transport/nats/`.
 - gRPC handlers live in `internal/transport/grpc/`.
+- Shared event contracts live in `libs/events`. Shared broker abstraction lives in `libs/eventbus`.
 - Usecases live in `internal/usecase/`. Must not import transport or driver types.
 - Storage implementations live in `internal/storage/<name>/`.
 - Domain types/entities/errors live in `internal/domain/`. No external dependencies.
@@ -226,11 +230,11 @@ cmd/app   → wires everything together
 
 1. Project Foundation
 2. Auth & Device Registration
-3. Android Background Location Tracking
+3. Event Bus Contracts & NATS JetStream Foundation
 4. Android Offline Event Queue
 5. WebSocket Tracker Protocol
 6. Tracking Gateway Service
-7. Kafka Event Contracts
+7. Kafka Event Contracts (superseded by EPIC 03)
 8. Trip Detection Engine
 9. Loop Route Detection
 10. Route Matching & Repeated Trips
@@ -240,6 +244,10 @@ cmd/app   → wires everything together
 14. User Correction Tools
 15. Observability & Reliability
 16. MVP Hardening
+
+Rescheduled (number TBD, requires explicit user confirmation):
+
+- Android Background Location Tracking (former EPIC 03, see .claude/EPICS.md)
 
 Start with EPIC 1 only.
 

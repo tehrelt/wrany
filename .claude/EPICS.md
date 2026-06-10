@@ -138,7 +138,78 @@ Requires EPIC 1 to be completed.
 
 ---
 
-# EPIC 03: Android Background Location Tracking
+# EPIC 03: Event Bus Contracts & NATS JetStream Foundation
+
+> Note: this epic replaces the former "EPIC 03: Android Background Location Tracking"
+> (now rescheduled, see below) and supersedes the originally planned "Kafka Event Contracts" epic.
+> The MVP event bus is NATS JetStream, not Kafka. Kafka/Redpanda remain possible future adapters.
+
+## Goal
+
+Create the backend event bus foundation: NATS JetStream dev infrastructure,
+shared event contracts, and a broker-agnostic publishing abstraction.
+
+## Scope
+
+### Infrastructure
+
+- Replace Kafka with NATS JetStream in docker-compose (JetStream enabled, file storage, persistent volume, healthcheck, internal network only).
+- Update `.env.example`: `NATS_URL`, `NATS_STREAM`; remove Kafka vars.
+- Makefile: `nats-check`, `nats-streams`, `nats-init` (via disposable nats-box container, no host CLI install).
+- Stream `WRANY_EVENTS` with wildcard subjects: `location.events.*`, `trip.*`, `route.*`, `dead-letter.*`.
+
+### Contracts (`libs/events`)
+
+- Common event envelope (event_id, event_type, event_version, occurred_at, produced_at, producer, correlation_id, payload).
+- Subject constants and durable consumer naming convention.
+- Payloads: `location.events.v1`, `trip.started.v1`, `trip.updated.v1`, `trip.completed.v1`, `route.matched.v1`, `dead-letter.v1`.
+- Validation for required fields and value ranges.
+
+### Abstraction (`libs/eventbus`)
+
+- `Publisher` interface (publish only; `EventBus` publish+consume is a documented future abstraction).
+- Minimal NATS JetStream adapter: Publish (with `Nats-Msg-Id = event_id` dedup header), EnsureStream, Close.
+- Consumer API: design only (durable name, ack/nack, redelivery, graceful shutdown). Implementation deferred to the first real consumer epic.
+
+### Documentation
+
+- Update current source-of-truth files: `.claude/CLAUDE.md`, `README.md`, service READMEs.
+- New: `docs/architecture/event-bus.md`, `docs/contracts/events.md`.
+- Honest ordering semantics: per-publisher-connection order only; workers sort by `recorded_at`; no Kafka-like partition ordering claims.
+- Dedup documented as best-effort publisher retry protection, not global business idempotency.
+- Historical EPIC files are not rewritten; mark with "Superseded by EPIC 03" notes where needed.
+
+## Out of Scope
+
+- WebSocket ingestion (`/v1/ws/tracker`) and session protocol
+- Android background tracking and offline queue
+- Trip detection state machine
+- Route matching, analytics API, web client
+- Real publishing from tracking-gateway / consuming in tracking-worker
+- Kafka/Redpanda adapters
+
+## Dependencies
+
+Requires EPIC 1 and EPIC 2 to be completed.
+
+## Acceptance Criteria
+
+- `docker-compose.yml` runs NATS JetStream instead of Kafka; `make up` brings up postgres, tracking-gateway, tracking-worker, nats.
+- `make nats-check` confirms JetStream is enabled.
+- `.env.example` contains only actually used NATS variables.
+- `libs/events` implemented: envelope, subjects, all six event contracts, validation.
+- `libs/eventbus` implemented: `Publisher` interface, minimal NATS adapter setting `Nats-Msg-Id = event_id`.
+- Unit tests for validation pass; `make test` passes.
+- Repeated publish with the same `event_id` within the JetStream dedup window does not create a duplicate (integration test).
+- README/docs updated; current Kafka references replaced or marked historical.
+
+---
+
+# RESCHEDULED: Android Background Location Tracking
+
+> Formerly EPIC 03. Rescheduled by EPIC 03 (Event Bus Contracts & NATS JetStream Foundation).
+> A new epic number will be assigned later with explicit user confirmation.
+> Content preserved unchanged below.
 
 ## Goal
 
