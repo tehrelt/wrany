@@ -36,6 +36,7 @@ services:
       retries: 5
 
   tracking-gateway:
+    restart: always
     build:
       context: .
       dockerfile: services/tracking-gateway/Dockerfile
@@ -62,11 +63,21 @@ services:
       retries: 10
 
   tracking-worker:
+    restart: always
     build:
-      context: ./services/tracking-worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/tracking-worker/Dockerfile
     environment:
       WORKER_PORT: ${WORKER_PORT:-8081}
+      DATABASE_URL: ${DATABASE_URL:-postgres://wrany:wrany@postgres:5432/wrany?sslmode=disable}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      NATS_STREAM: ${NATS_STREAM:-WRANY_EVENTS}
+      NATS_LOCATION_SUBJECT: ${NATS_LOCATION_SUBJECT:-location.events.v1}
+      NATS_LOCATION_CONSUMER_DURABLE: ${NATS_LOCATION_CONSUMER_DURABLE:-tracking-worker-location-consumer}
+      NATS_CONSUMER_ACK_WAIT_SEC: ${NATS_CONSUMER_ACK_WAIT_SEC:-30}
+      NATS_CONSUMER_MAX_DELIVER: ${NATS_CONSUMER_MAX_DELIVER:-5}
+      NATS_CONSUMER_BATCH_SIZE: ${NATS_CONSUMER_BATCH_SIZE:-100}
+      NATS_CONSUMER_POLL_TIMEOUT_SEC: ${NATS_CONSUMER_POLL_TIMEOUT_SEC:-5}
     ports:
       - "${WORKER_PORT:-8081}:8081"
     networks:
