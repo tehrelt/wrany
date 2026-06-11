@@ -1,7 +1,8 @@
 .PHONY: up down logs reset check-postgis db-shell test \
         nats-check nats-streams nats-init \
         migrate-up migrate-down migrate-version \
-        migrate-worker-up migrate-worker-down migrate-worker-version
+        migrate-worker-up migrate-worker-down migrate-worker-version \
+        openapi-generate openapi-merge openapi-check swagger-up
 
 up:
 	docker compose up -d --build
@@ -69,3 +70,43 @@ migrate-worker-down:
 
 migrate-worker-version:
 	migrate -path $(WORKER_MIGRATIONS_DIR) -database "$(DATABASE_URL)" version
+
+# ── OpenAPI ──────────────────────────────────────────────────────────────────
+
+# Generate per-service OpenAPI specs from backend annotations.
+# Requires swag CLI: go install github.com/swaggo/swag/cmd/swag@latest
+openapi-generate:
+	@mkdir -p docs/openapi/generated
+	cd services/tracking-gateway && swag init \
+		-g cmd/tracking-gateway/main.go \
+		--output ../../docs/openapi/generated \
+		--outputTypes json \
+		--parseDependency \
+		--parseInternal
+	@mv docs/openapi/generated/swagger.json docs/openapi/generated/tracking-gateway.json
+	@echo "Generated: docs/openapi/generated/tracking-gateway.json"
+
+# Merge per-service specs into combined.json.
+# Requires: docs/openapi/generated/ populated (run make openapi-generate first).
+openapi-merge:
+	@mkdir -p docs/openapi/generated
+	npx --yes openapi-merge-cli --config docs/openapi/merge/openapi-merge.json
+	@echo "Merged: docs/openapi/generated/combined.json"
+
+# Check that spec generation succeeds (used in CI).
+openapi-check:
+	@mkdir -p /tmp/swag-check
+	cd services/tracking-gateway && swag init \
+		-g cmd/tracking-gateway/main.go \
+		--output /tmp/swag-check \
+		--outputTypes json \
+		--parseDependency \
+		--parseInternal
+	@echo "openapi-check passed: tracking-gateway spec generates without errors"
+
+# Build and start Swagger UI container (separate profile — not included in make up).
+# The image embeds the OpenAPI spec generated from backend annotations at build time.
+# Re-run after changing handler annotations to pick up the new spec.
+swagger-up:
+	docker compose --profile tools up swagger-ui -d --build
+	@echo "Swagger UI: http://localhost:8088"

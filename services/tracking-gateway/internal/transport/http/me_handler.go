@@ -14,6 +14,14 @@ func NewMeHandler(me *usecase.MeUsecase) *MeHandler {
 	return &MeHandler{me: me}
 }
 
+// GetMe godoc
+// @Summary      Get current user
+// @Tags         users
+// @Produce      json
+// @Success      200  {object}  swMeEnv
+// @Failure      401  {object}  swErr
+// @Security     BearerAuth
+// @Router       /v1/me [get]
 func (h *MeHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {

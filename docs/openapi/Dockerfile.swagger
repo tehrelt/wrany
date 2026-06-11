@@ -1,0 +1,30 @@
+# Stage 1: generate OpenAPI spec from Go annotations at build time.
+# The full repo is the build context so swag can parse all source files.
+FROM golang:1.23-alpine AS spec-gen
+WORKDIR /src
+COPY . .
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.3
+RUN cd services/tracking-gateway && swag init \
+      -g cmd/tracking-gateway/main.go \
+      --output /specs \
+      --outputTypes json \
+      --parseDependency \
+      --parseInternal && \
+    mv /specs/swagger.json /specs/tracking-gateway.json
+
+# Stage 2: merge specs.
+# When more services are added, add their specs to stage 1 and extend
+# the merge config. For now: combined == tracking-gateway.
+FROM node:20-alpine AS merge
+COPY --from=spec-gen /specs /specs
+COPY docs/openapi/merge/openapi-merge.json /merge/openapi-merge.json
+# Rewrite paths relative to /merge/ so openapi-merge-cli finds the files.
+RUN sed -i 's|../generated/|/specs/|g' /merge/openapi-merge.json && \
+    sed -i 's|../generated/combined.json|/specs/combined.json|g' /merge/openapi-merge.json
+RUN npx --yes openapi-merge-cli --config /merge/openapi-merge.json
+
+# Stage 3: swagger-ui with specs embedded — no runtime mounts needed.
+FROM swaggerapi/swagger-ui:latest
+COPY --from=merge /specs /usr/share/nginx/html/openapi
+ENV URLS='[{"name":"combined","url":"/openapi/combined.json"},{"name":"tracking-gateway","url":"/openapi/tracking-gateway.json"}]'
+ENV URLS_PRIMARY_NAME=combined

@@ -17,11 +17,19 @@ func NewAuthHandler(auth *usecase.AuthUsecase) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
 
+// Register godoc
+// @Summary      Register a new user
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      swRegisterReq  true  "Registration credentials"
+// @Success      201   {object}  swTokenPairEnv
+// @Failure      400   {object}  swErr
+// @Failure      409   {object}  swErr
+// @Failure      422   {object}  swErr
+// @Router       /v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var body swRegisterReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -46,11 +54,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, pair)
 }
 
+// Login godoc
+// @Summary      Login
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      swLoginReq  true  "Login credentials"
+// @Success      200   {object}  swTokenPairEnv
+// @Failure      400   {object}  swErr
+// @Failure      401   {object}  swErr
+// @Router       /v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var body swLoginReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -68,10 +83,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pair)
 }
 
+// Refresh godoc
+// @Summary      Refresh access token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      swRefreshReq  true  "Refresh token"
+// @Success      200   {object}  swTokenPairEnv
+// @Failure      400   {object}  swErr
+// @Failure      401   {object}  swErr
+// @Router       /v1/auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	var body swRefreshReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return

@@ -15,6 +15,16 @@ import (
 	"github.com/wrany/tracking-gateway/internal/migrations"
 )
 
+// @title          WR any% API
+// @version        0.1.0
+// @description    Backend API for the WR any% automatic route tracking application.
+// @description    WebSocket tracker: ws://host/v1/ws/tracker — see docs/contracts/websocket-tracker-protocol.md
+// @host           localhost:8080
+// @BasePath       /
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 Bearer JWT access token. For WebSocket upgrade ?access_token=<jwt> is also accepted.
 func main() {
 	cfg := config.Load()
 

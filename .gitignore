@@ -31,6 +31,12 @@ android/app/build/
 *.apk
 *.aab
 
+# OpenAPI generated specs (always regenerated via make openapi-generate)
+docs/openapi/generated/
+
+# React Native generated API client
+apps/android-tracker/src/api/generated/
+
 # Claude local/private files
 CLAUDE.local.md
 .claude/settings.local.json.env
