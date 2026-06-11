@@ -392,6 +392,17 @@ Status: Done (committed with EPIC.md)
 
 ## Implementation Log
 
+### 2026-06-11 — JWT refresh cycle (Android + web)
+
+- `tokenStorage.ts` — добавлен `getRefreshToken`
+- `authApi.ts` (Android) — добавлен `refreshTokens`
+- `httpClient.ts` (Android) — auto-read token из storage, 401→refresh→retry, mutex, `AuthExpiredError`
+- `App.tsx` — `onSessionExpired` callback → `clearTokens` + reset state
+- `TrackerScreen.tsx` — `onSessionExpired` prop, catch `AuthExpiredError`, reconnect с fresh token из storage
+- `authApi.ts` (web) — добавлен `refreshTokens`
+- `client.ts` (web) — axios response interceptor, single-flight refresh, `auth:logout` event на failure
+- `useAuth.ts` (web) — слушает `auth:logout`, сбрасывает token state
+
 ### 2026-06-11 — Backend read API (T02–T07)
 
 - `internal/domain/tracking_point.go` — `TrackingPoint`, `TrackingPointFilter`, `TrackingSummary`
