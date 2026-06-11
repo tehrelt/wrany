@@ -2,8 +2,9 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -35,20 +36,23 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	meUC := usecase.NewMeUsecase(userRepo)
 
 	if cfg.NatsURL == "" {
-		log.Fatal("nats: NATS_URL is required — set NATS_URL to connect to JetStream")
+		slog.Error("nats: NATS_URL is required — set NATS_URL to connect to JetStream")
+		os.Exit(1)
 	}
 	bus, err := natseventbus.Connect(natseventbus.Config{
 		URL:    cfg.NatsURL,
 		Stream: cfg.NatsStream,
 	})
 	if err != nil {
-		log.Fatalf("nats: connect: %v", err)
+		slog.Error("nats: connect", "err", err)
+		os.Exit(1)
 	}
 	if err := bus.EnsureStream(context.Background()); err != nil {
-		log.Fatalf("nats: ensure stream: %v", err)
+		slog.Error("nats: ensure stream", "err", err)
+		os.Exit(1)
 	}
 	natsBus := bus
-	log.Printf("nats: connected to %s stream=%s", cfg.NatsURL, cfg.NatsStream)
+	slog.Info("nats: connected", "url", cfg.NatsURL, "stream", cfg.NatsStream)
 	var pub eventbus.Publisher = natsBus
 
 	trackerUC := usecase.NewTrackerIngestionUseCase(
@@ -71,14 +75,14 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	return &App{
 		srv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: router,
+			Handler: httptransport.LoggingMiddleware(httptransport.CORSMiddleware(router)),
 		},
 		natsBus: natsBus,
 	}
 }
 
 func (a *App) Run() error {
-	log.Printf("tracking-gateway listening on %s", a.srv.Addr)
+	slog.Info("tracking-gateway listening", "addr", a.srv.Addr)
 	if err := a.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
@@ -86,13 +90,13 @@ func (a *App) Run() error {
 }
 
 func (a *App) Shutdown(ctx context.Context) error {
-	log.Println("tracking-gateway shutting down")
+	slog.Info("tracking-gateway shutting down")
 	if err := a.srv.Shutdown(ctx); err != nil {
 		return err
 	}
 	if a.natsBus != nil {
 		if err := a.natsBus.Close(); err != nil {
-			log.Printf("nats: close: %v", err)
+			slog.Error("nats: close", "err", err)
 		}
 	}
 	return nil

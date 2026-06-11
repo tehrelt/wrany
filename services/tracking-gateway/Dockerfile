@@ -1,19 +1,25 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /workspace
 
-# Copy workspace descriptor and all module sources.
+# --- dependency layer (cached unless go.mod/go.sum change) ---
 COPY go.work go.work.sum ./
-COPY libs/events ./libs/events
+COPY libs/events/go.mod   libs/events/go.mod
+COPY libs/eventbus/go.mod libs/eventbus/go.mod
+COPY services/tracking-gateway/go.mod services/tracking-gateway/go.mod
+COPY services/tracking-gateway/go.sum services/tracking-gateway/go.sum
+
+WORKDIR /workspace/services/tracking-gateway
+ENV GOWORK=off
+RUN go mod download
+
+# --- source layer ---
+WORKDIR /workspace
+COPY libs/events  ./libs/events
 COPY libs/eventbus ./libs/eventbus
 COPY services/tracking-gateway ./services/tracking-gateway
 
 WORKDIR /workspace/services/tracking-gateway
-# Disable workspace mode so only go.mod replace directives are used.
-# libs/events and libs/eventbus are available at ../../libs/* as declared.
-ENV GOWORK=off
-RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/gateway ./cmd/tracking-gateway
-# Build migrate CLI with postgres driver tag
 RUN CGO_ENABLED=0 GOOS=linux go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1 \
     && cp "$(go env GOPATH)/bin/migrate" /out/migrate
 

@@ -1,9 +1,14 @@
 package http
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -24,42 +29,131 @@ func WithUserID(ctx context.Context, userID uuid.UUID) context.Context {
 	return context.WithValue(ctx, userIDKey, userID)
 }
 
-// AuthMiddleware validates the Bearer JWT and injects userID into the request context.
+// parseJWT validates a raw JWT string and returns the subject UUID.
+func parseJWT(raw string, secret []byte) (uuid.UUID, error) {
+	token, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return secret, nil
+	}, jwt.WithExpirationRequired())
+	if err != nil || !token.Valid {
+		return uuid.Nil, jwt.ErrSignatureInvalid
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return uuid.Nil, jwt.ErrSignatureInvalid
+	}
+	sub, _ := claims.GetSubject()
+	return uuid.Parse(sub)
+}
+
+// CORSMiddleware adds permissive CORS headers for local development (Swagger UI, etc.).
+// Not intended for production — configure a real CORS policy before going live.
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// AuthMiddleware validates Bearer JWT from the Authorization header only.
+// Use for all regular protected REST endpoints.
 func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") {
+			raw := bearerToken(r)
+			if raw == "" {
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			raw := strings.TrimPrefix(header, "Bearer ")
-
-			token, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-				return jwtSecret, nil
-			}, jwt.WithExpirationRequired())
-			if err != nil || !token.Valid {
-				writeError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				writeError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-			sub, _ := claims.GetSubject()
-			userID, err := uuid.Parse(sub)
+			userID, err := parseJWT(raw, jwtSecret)
 			if err != nil {
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// WSAuthMiddleware validates JWT for the WebSocket tracker endpoint.
+// Header takes priority; falls back to ?access_token= query param.
+// The query param fallback exists because React Native Android's WebSocket
+// API does not support custom headers on the HTTP upgrade request.
+// Never apply this middleware to regular REST endpoints.
+func WSAuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw := bearerToken(r)
+			if raw == "" {
+				// Fallback: ?access_token= query param (WS upgrade only).
+				// Do NOT log r.URL or query string — the token would leak.
+				raw = r.URL.Query().Get("access_token")
+			}
+			if raw == "" {
+				slog.Warn("ws: auth: no token")
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			userID, err := parseJWT(raw, jwtSecret)
+			if err != nil {
+				slog.Warn("ws: auth: invalid token", "err", err)
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := sw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+	}
+	return h.Hijack()
+}
+
+// LoggingMiddleware logs method, path, status, and latency for every request.
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		slog.Info("http",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sw.status,
+			"latency_ms", time.Since(start).Milliseconds(),
+		)
+	})
+}
+
+// bearerToken extracts the raw JWT from the Authorization: Bearer header.
+// Returns empty string if the header is absent or malformed.
+func bearerToken(r *http.Request) string {
+	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		return ""
+	}
+	return raw
 }

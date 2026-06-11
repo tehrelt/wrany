@@ -282,3 +282,53 @@ Implement Android background location collection foundation in React Native.
 - Backend trip detection
 
 Depends on EPIC 2 only if authenticated config is needed.
+
+---
+
+# EPIC 06: Android Tracker MVP — Foreground Manual Tracking
+
+## Goal
+
+Build a minimal React Native Android application for manual foreground testing of the complete backend pipeline with real GPS data from a phone.
+
+Also establishes the OpenAPI generation pipeline: backend annotations → generated specs → Swagger UI container → TypeScript client codegen.
+
+## Scope
+
+### Backend
+- `swaggo/swag` annotations on all tracking-gateway REST handlers
+- `make openapi-generate` — generates `docs/openapi/generated/tracking-gateway.json`
+- `make openapi-merge` — merges into `docs/openapi/generated/combined.json`
+- `make openapi-check` — verifies spec generation succeeds
+- `make swagger-up` — starts Swagger UI container at `http://localhost:8088`
+- `swagger-ui` Docker service (profile: tools)
+- `WSAuthMiddleware` — backward-compatible `?access_token=` fallback for WebSocket auth
+
+### Android app (`apps/android-tracker`)
+- React Native CLI + TypeScript
+- Auth screen: register / login
+- Device UUID generation and persistence
+- Device registration
+- WebSocket tracker client with `session.start` / `location.batch` / `ack` handling
+- Foreground GPS location watcher
+- In-memory batch queue (flush on size ≥ 10 or 10s interval)
+- Debug UI with live counters: pending / accepted / duplicated / rejected
+- `Send Test Point` button (synthetic event without real GPS)
+- TypeScript API client from generated OpenAPI spec
+
+## Out of Scope
+- Background tracking, foreground service
+- SQLite offline queue
+- Activity recognition
+- Route / trip detection
+- Map UI, analytics, web client
+
+## Dependencies
+- EPIC 1, 2, 3, 4, 5
+
+## Acceptance Criteria
+- `make openapi-generate` succeeds; `docs/openapi/generated/tracking-gateway.json` created
+- `make openapi-merge` succeeds; `combined.json` created
+- Swagger UI accessible at `http://localhost:8088`
+- Android app builds and connects to backend
+- Full manual E2E flow works: register → login → device registration → WS connect → session.start → location.batch → ack → DB row verified

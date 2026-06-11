@@ -17,6 +17,18 @@ func NewDeviceHandler(devices *usecase.DeviceUsecase) *DeviceHandler {
 	return &DeviceHandler{devices: devices}
 }
 
+// RegisterDevice godoc
+// @Summary      Register a device
+// @Tags         devices
+// @Accept       json
+// @Produce      json
+// @Param        body  body      swRegisterDeviceReq  true  "Device registration"
+// @Success      201   {object}  swDeviceEnv
+// @Failure      400   {object}  swErr
+// @Failure      401   {object}  swErr
+// @Failure      422   {object}  swErr
+// @Security     BearerAuth
+// @Router       /v1/devices/register [post]
 func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -24,11 +36,7 @@ func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		DeviceID string  `json:"device_id"`
-		Name     *string `json:"name"`
-		Platform *string `json:"platform"`
-	}
+	var body swRegisterDeviceReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -54,6 +62,14 @@ func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, device)
 }
 
+// ListDevices godoc
+// @Summary      List current user's devices
+// @Tags         devices
+// @Produce      json
+// @Success      200  {object}  swDevicesEnv
+// @Failure      401  {object}  swErr
+// @Security     BearerAuth
+// @Router       /v1/devices [get]
 func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {

@@ -1,7 +1,8 @@
 .PHONY: up down logs reset check-postgis db-shell test \
         nats-check nats-streams nats-init \
         migrate-up migrate-down migrate-version \
-        migrate-worker-up migrate-worker-down migrate-worker-version
+        migrate-worker-up migrate-worker-down migrate-worker-version \
+        swagger-gen swagger-up
 
 up:
 	docker compose up -d --build
@@ -69,3 +70,22 @@ migrate-worker-down:
 
 migrate-worker-version:
 	migrate -path $(WORKER_MIGRATIONS_DIR) -database "$(DATABASE_URL)" version
+
+# ── OpenAPI ──────────────────────────────────────────────────────────────────
+
+# Regenerate services/tracking-gateway/docs/ from Go annotations.
+# Requires swag CLI: go install github.com/swaggo/swag/cmd/swag@latest
+# Run after changing handler annotations; commit the result.
+swagger-gen:
+	cd services/tracking-gateway && GOWORK=off swag init \
+		-g cmd/tracking-gateway/main.go \
+		--outputTypes json,go \
+		--parseDependency \
+		--parseInternal
+	@echo "Generated: services/tracking-gateway/docs/"
+
+# Start Swagger UI (no build — spec is served live by tracking-gateway).
+# Requires: make up (tracking-gateway must be running on :8080).
+swagger-up:
+	docker compose --profile tools up swagger-ui -d
+	@echo "Swagger UI: http://localhost:8088"

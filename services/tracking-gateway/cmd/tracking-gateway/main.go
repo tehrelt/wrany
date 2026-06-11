@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,26 +10,42 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	_ "github.com/wrany/tracking-gateway/docs"
 	"github.com/wrany/tracking-gateway/internal/app"
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/migrations"
 )
 
+// @title          WR any% API
+// @version        0.1.0
+// @description    Backend API for the WR any% automatic route tracking application.
+// @description    WebSocket tracker: ws://host/v1/ws/tracker — see docs/contracts/websocket-tracker-protocol.md
+// @host           localhost:8080
+// @BasePath       /
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 Bearer JWT access token. For WebSocket upgrade ?access_token=<jwt> is also accepted.
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
 	cfg := config.Load()
 
 	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		slog.Error("connect to database", "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := db.Ping(context.Background()); err != nil {
-		log.Fatalf("ping database: %v", err)
+		slog.Error("ping database", "err", err)
+		os.Exit(1)
 	}
 
 	if err := migrations.Run(cfg.DatabaseURL, cfg.MigrationsPath); err != nil {
-		log.Fatalf("migrations failed: %v", err)
+		slog.Error("migrations failed", "err", err)
+		os.Exit(1)
 	}
 
 	a := app.New(cfg, db)
@@ -39,7 +55,7 @@ func main() {
 
 	go func() {
 		if err := a.Run(); err != nil {
-			log.Printf("server error: %v", err)
+			slog.Error("server error", "err", err)
 		}
 	}()
 
@@ -47,6 +63,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := a.Shutdown(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
+		slog.Error("shutdown error", "err", err)
 	}
 }
