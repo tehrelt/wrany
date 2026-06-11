@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,7 +15,11 @@ import {
   startWatcher,
   stopWatcher,
 } from '../tracker/locationService';
-import { SocketCallbacks, SocketStatus, TrackerSocket } from '../tracker/trackerSocket';
+import {
+  SocketCallbacks,
+  SocketStatus,
+  TrackerSocket,
+} from '../tracker/trackerSocket';
 
 interface Props {
   token: string;
@@ -30,9 +35,15 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
   const [deviceId, setDeviceId] = useState('');
   const [deviceRegistered, setDeviceRegistered] = useState(false);
   const [wsStatus, setWsStatus] = useState<SocketStatus>('disconnected');
-  const [gpsPermission, setGpsPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [gpsPermission, setGpsPermission] = useState<
+    'unknown' | 'granted' | 'denied'
+  >('unknown');
   const [tracking, setTracking] = useState(false);
-  const [counters, setCounters] = useState<Counters>({ accepted: 0, duplicated: 0, rejected: 0 });
+  const [counters, setCounters] = useState<Counters>({
+    accepted: 0,
+    duplicated: 0,
+    rejected: 0,
+  });
   const [pending, setPending] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastLocation, setLastLocation] = useState<string | null>(null);
@@ -74,7 +85,9 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
       await registerDevice(deviceId, token);
       setDeviceRegistered(true);
     } catch (e) {
-      setLastError(e instanceof Error ? e.message : 'Device registration failed');
+      setLastError(
+        e instanceof Error ? e.message : 'Device registration failed',
+      );
     }
   }
 
@@ -103,7 +116,11 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
     watchIdRef.current = startWatcher(
       deviceId,
       event => {
-        setLastLocation(`${event.lat.toFixed(5)}, ${event.lon.toFixed(5)} ±${event.accuracy_m.toFixed(0)}m`);
+        setLastLocation(
+          `${event.lat.toFixed(5)}, ${event.lon.toFixed(
+            5,
+          )} ±${event.accuracy_m.toFixed(0)}m`,
+        );
         socketRef.current?.enqueue(event);
         syncPending();
       },
@@ -135,10 +152,15 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
 
       <Section label="Status">
         <Row label="Device ID" value={deviceId || '…'} mono />
-        <Row label="Device registered" value={deviceRegistered ? 'yes' : 'no'} />
+        <Row
+          label="Device registered"
+          value={deviceRegistered ? 'yes' : 'no'}
+        />
         <Row label="WS status" value={wsStatus} />
         <Row label="GPS permission" value={gpsPermission} />
-        {lastLocation && <Row label="Last location" value={lastLocation} mono />}
+        {lastLocation && (
+          <Row label="Last location" value={lastLocation} mono />
+        )}
       </Section>
 
       <Section label="Counters">
@@ -155,10 +177,16 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
       )}
 
       <Section label="Actions">
-        <Btn label="Register Device" onPress={handleRegisterDevice} disabled={!deviceId || deviceRegistered} />
+        <Btn
+          label="Register Device"
+          onPress={handleRegisterDevice}
+          disabled={!deviceId || deviceRegistered}
+        />
         <Btn
           label={wsStatus === 'disconnected' ? 'Connect WS' : 'Disconnect WS'}
-          onPress={wsStatus === 'disconnected' ? handleConnect : handleDisconnect}
+          onPress={
+            wsStatus === 'disconnected' ? handleConnect : handleDisconnect
+          }
           disabled={!deviceId}
         />
         <Btn
@@ -177,7 +205,13 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <View style={s.section}>
       <Text style={s.sectionLabel}>{label}</Text>
@@ -186,19 +220,35 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <View style={s.row}>
       <Text style={s.rowLabel}>{label}</Text>
-      <Text style={[s.rowValue, mono && s.mono]} numberOfLines={1}>{value}</Text>
+      <Text style={[s.rowValue, mono && s.mono]} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
 
 function Btn({
-  label, onPress, disabled, accent,
+  label,
+  onPress,
+  disabled,
+  accent,
 }: {
-  label: string; onPress: () => void; disabled?: boolean; accent?: boolean;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  accent?: boolean;
 }) {
   return (
     <TouchableOpacity
@@ -213,23 +263,60 @@ function Btn({
 
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#f9fafb' },
-  container: { padding: 16, paddingBottom: 40 },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-  section: {
-    backgroundColor: '#fff', borderRadius: 10, padding: 12,
-    marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05,
-    shadowRadius: 4, elevation: 2,
+  container: {
+    padding: 16,
+    paddingTop: (StatusBar.currentHeight ?? 24) + 8,
+    paddingBottom: 40,
   },
-  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#6b7280', marginBottom: 8, textTransform: 'uppercase' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
   rowLabel: { color: '#374151', flex: 1 },
-  rowValue: { color: '#111827', fontWeight: '500', flex: 2, textAlign: 'right' },
+  rowValue: {
+    color: '#111827',
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
   mono: { fontFamily: 'monospace', fontSize: 12 },
-  errorBox: { backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, marginBottom: 12 },
+  errorBox: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
   errorText: { color: '#dc2626', fontSize: 13 },
   btn: {
-    backgroundColor: '#2563eb', borderRadius: 8,
-    padding: 12, alignItems: 'center', marginBottom: 8,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   btnDisabled: { backgroundColor: '#d1d5db' },
   btnAccent: { backgroundColor: '#dc2626' },

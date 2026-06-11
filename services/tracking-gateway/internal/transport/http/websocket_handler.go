@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -34,16 +34,19 @@ func NewTrackerHandler(ingestion *usecase.TrackerIngestionUseCase, cfg config.Co
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		// Origin policy:
-		// - Empty origin is always allowed (Android / non-browser clients).
-		// - Browser origins are checked against WSAllowedOrigins allowlist.
+		// JWT auth already protects this endpoint — CSRF is not applicable.
+		// Android sends a non-empty Origin that varies by device/OS version,
+		// so we accept all origins here and rely on token validation.
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 			if origin == "" {
 				return true
 			}
-			_, ok := allowedOrigins[origin]
-			return ok
+			if len(allowedOrigins) > 0 {
+				_, ok := allowedOrigins[origin]
+				return ok
+			}
+			return true
 		},
 	}
 	return &TrackerHandler{ingestion: ingestion, upgrader: upgrader, cfg: cfg}
@@ -63,9 +66,10 @@ func (h *TrackerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("websocket: upgrade failed for user %s: %v", userID, err)
+		slog.Error("ws: upgrade failed", "user_id", userID, "err", err)
 		return
 	}
+	slog.Info("ws: connected", "user_id", userID)
 	defer conn.Close()
 
 	// Transport-level read limit (before JSON decode).
@@ -113,7 +117,7 @@ func (h *TrackerHandler) readLoop(ctx context.Context, conn *websocket.Conn, use
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("websocket: unexpected close for user %s: %v", userID, err)
+				slog.Warn("ws: unexpected close", "user_id", userID, "err", err)
 			}
 			return
 		}
@@ -170,7 +174,7 @@ func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket
 			sendWSError(conn, msg.RequestID, domain.ErrCodeDeviceNotRegistered, "device not registered for this user")
 			return nil
 		}
-		log.Printf("websocket: start session for user %s: %v", userID, err)
+		slog.Error("ws: start session", "user_id", userID, "err", err)
 		sendWSError(conn, msg.RequestID, domain.ErrCodeInternalError, "internal error")
 		return nil
 	}
@@ -184,9 +188,10 @@ func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket
 		},
 	}
 	if err := sendWSMessage(conn, MsgTypeSessionAccepted, msg.RequestID, accepted); err != nil {
-		log.Printf("websocket: send session.accepted for user %s: %v", userID, err)
+		slog.Error("ws: send session.accepted", "user_id", userID, "err", err)
 		return nil
 	}
+	slog.Info("ws: session accepted", "user_id", userID, "device_id", deviceID, "session_id", session.ID)
 	return session
 }
 
@@ -229,7 +234,7 @@ func (h *TrackerHandler) handleLocationBatch(ctx context.Context, conn *websocke
 		Rejected:   allRejected,
 	}
 	if err := sendWSMessage(conn, MsgTypeLocationBatchAck, msg.RequestID, ack); err != nil {
-		log.Printf("websocket: send location.batch.ack: %v", err)
+		slog.Error("ws: send location.batch.ack", "err", err)
 		return true
 	}
 	return false

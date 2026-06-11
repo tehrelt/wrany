@@ -1,9 +1,14 @@
 package http
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -94,11 +99,13 @@ func WSAuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 				raw = r.URL.Query().Get("access_token")
 			}
 			if raw == "" {
+				slog.Warn("ws: auth: no token")
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 			userID, err := parseJWT(raw, jwtSecret)
 			if err != nil {
+				slog.Warn("ws: auth: invalid token", "err", err)
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
@@ -106,6 +113,39 @@ func WSAuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := sw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+	}
+	return h.Hijack()
+}
+
+// LoggingMiddleware logs method, path, status, and latency for every request.
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		slog.Info("http",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sw.status,
+			"latency_ms", time.Since(start).Milliseconds(),
+		)
+	})
 }
 
 // bearerToken extracts the raw JWT from the Authorization: Bearer header.

@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/wrany/tracking-gateway/internal/domain"
@@ -42,15 +43,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrEmailTaken):
+			slog.Warn("register: email taken", "email", body.Email)
 			writeError(w, http.StatusConflict, "unable to register with provided credentials")
 		case errors.Is(err, usecase.ErrValidation):
+			slog.Warn("register: validation failed", "email", body.Email)
 			writeError(w, http.StatusUnprocessableEntity, "invalid email or password")
 		default:
+			slog.Error("register: internal", "email", body.Email, "err", err)
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
 
+	slog.Info("register: ok", "email", body.Email)
 	writeJSON(w, http.StatusCreated, pair)
 }
 
@@ -76,10 +81,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Password: body.Password,
 	})
 	if err != nil {
+		slog.Warn("login: failed", "email", body.Email, "err", err)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
+	slog.Info("login: ok", "email", body.Email)
 	writeJSON(w, http.StatusOK, pair)
 }
 

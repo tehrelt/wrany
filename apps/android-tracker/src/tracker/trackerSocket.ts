@@ -17,7 +17,11 @@ export type SocketStatus =
 
 export interface SocketCallbacks {
   onStatusChange: (s: SocketStatus) => void;
-  onAck: (accepted: string[], duplicated: string[], rejected: Array<{event_id: string; reason: string}>) => void;
+  onAck: (
+    accepted: string[],
+    duplicated: string[],
+    rejected: Array<{ event_id: string; reason: string }>,
+  ) => void;
   onError: (code: string, message: string) => void;
 }
 
@@ -51,8 +55,11 @@ export class TrackerSocket {
 
     this.ws.onmessage = e => this.handleMessage(e.data as string);
 
-    this.ws.onerror = () => {
-      this.callbacks.onError('WS_ERROR', 'WebSocket error');
+    this.ws.onerror = (e: Event) => {
+      const msg =
+        (e as unknown as { message?: string }).message ?? 'WebSocket error';
+      console.error('[WS] onerror:', msg, e);
+      this.callbacks.onError('WS_ERROR', msg);
     };
 
     this.ws.onclose = () => {
@@ -85,7 +92,11 @@ export class TrackerSocket {
   private sendBatch(events: LocationEvent[]): void {
     if (!this.ws || !this.sessionAccepted || events.length === 0) return;
     const payload: LocationBatchPayload = { device_id: this.deviceId, events };
-    this.send({ type: 'location.batch', request_id: `batch_${Date.now()}`, payload });
+    this.send({
+      type: 'location.batch',
+      request_id: `batch_${Date.now()}`,
+      payload,
+    });
   }
 
   private handleMessage(raw: string): void {
@@ -109,7 +120,11 @@ export class TrackerSocket {
       case 'location.batch.ack': {
         const p = msg.payload as LocationBatchAckPayload;
         this.queue.ack(p.accepted ?? [], p.duplicated ?? []);
-        this.callbacks.onAck(p.accepted ?? [], p.duplicated ?? [], p.rejected ?? []);
+        this.callbacks.onAck(
+          p.accepted ?? [],
+          p.duplicated ?? [],
+          p.rejected ?? [],
+        );
         break;
       }
       case 'error': {
