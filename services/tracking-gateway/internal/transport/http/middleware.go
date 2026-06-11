@@ -43,6 +43,21 @@ func parseJWT(raw string, secret []byte) (uuid.UUID, error) {
 	return uuid.Parse(sub)
 }
 
+// CORSMiddleware adds permissive CORS headers for local development (Swagger UI, etc.).
+// Not intended for production — configure a real CORS policy before going live.
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // AuthMiddleware validates Bearer JWT from the Authorization header only.
 // Use for all regular protected REST endpoints.
 func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {

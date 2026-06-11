@@ -71,7 +71,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	return &App{
 		srv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: router,
+			Handler: httptransport.CORSMiddleware(router),
 		},
 		natsBus: natsBus,
 	}
