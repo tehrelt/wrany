@@ -23,14 +23,14 @@ func NewAuthHandler(auth *usecase.AuthUsecase) *AuthHandler {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        body  body      swRegisterReq  true  "Registration credentials"
-// @Success      201   {object}  swTokenPairEnv
-// @Failure      400   {object}  swErr
-// @Failure      409   {object}  swErr
-// @Failure      422   {object}  swErr
+// @Param        body  body      RegisterReq  true  "Registration credentials"
+// @Success      201   {object}  TokenPairEnv
+// @Failure      400   {object}  ApiError
+// @Failure      409   {object}  ApiError
+// @Failure      422   {object}  ApiError
 // @Router       /v1/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var body swRegisterReq
+	var body RegisterReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -64,13 +64,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        body  body      swLoginReq  true  "Login credentials"
-// @Success      200   {object}  swTokenPairEnv
-// @Failure      400   {object}  swErr
-// @Failure      401   {object}  swErr
+// @Param        body  body      LoginReq  true  "Login credentials"
+// @Success      200   {object}  TokenPairEnv
+// @Failure      400   {object}  ApiError
+// @Failure      401   {object}  ApiError
 // @Router       /v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var body swLoginReq
+	var body LoginReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -95,13 +95,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        body  body      swRefreshReq  true  "Refresh token"
-// @Success      200   {object}  swTokenPairEnv
-// @Failure      400   {object}  swErr
-// @Failure      401   {object}  swErr
+// @Param        body  body      RefreshReq  true  "Refresh token"
+// @Success      200   {object}  TokenPairEnv
+// @Failure      400   {object}  ApiError
+// @Failure      401   {object}  ApiError
 // @Router       /v1/auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var body swRefreshReq
+	var body RefreshReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return

@@ -22,7 +22,13 @@ export interface LocationEvent {
   accuracy_m: number;
   speed_mps?: number;
   bearing_deg?: number;
-  activity_type?: 'walking' | 'running' | 'bicycle' | 'vehicle' | 'stationary' | 'unknown';
+  activity_type?:
+    | 'walking'
+    | 'running'
+    | 'bicycle'
+    | 'vehicle'
+    | 'stationary'
+    | 'unknown';
   activity_confidence?: number;
   battery_level?: number;
 }

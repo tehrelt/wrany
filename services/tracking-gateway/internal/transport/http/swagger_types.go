@@ -1,53 +1,39 @@
 package http
 
-// swagger request / response types.
-// Request types are used directly by handlers; response envelope types
-// are referenced only in godoc annotations and declared below.
+// Swagger request / response types — all exported so swag generates clean schema names.
 
-// blank declarations prevent "unused type" linter warnings for doc-only types.
-var (
-	_ = swErr{}
-	_ = swTokenPairEnv{}
-	_ = swDeviceEnv{}
-	_ = swDevicesEnv{}
-	_ = swMeEnv{}
-	_ = swHealthzEnv{}
-	_ = swTrackingPointsEnv{}
-	_ = swTrackingSummaryEnv{}
-)
-
-// swRegisterReq is the body for POST /v1/auth/register.
-type swRegisterReq struct {
+// RegisterReq is the body for POST /v1/auth/register.
+type RegisterReq struct {
 	Email    string `json:"email"    example:"rider@example.com"`
 	Password string `json:"password" example:"hunter2"`
 }
 
-// swLoginReq is the body for POST /v1/auth/login.
-type swLoginReq struct {
+// LoginReq is the body for POST /v1/auth/login.
+type LoginReq struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// swRefreshReq is the body for POST /v1/auth/refresh.
-type swRefreshReq struct {
+// RefreshReq is the body for POST /v1/auth/refresh.
+type RefreshReq struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// swRegisterDeviceReq is the body for POST /v1/devices/register.
-type swRegisterDeviceReq struct {
+// RegisterDeviceReq is the body for POST /v1/devices/register.
+type RegisterDeviceReq struct {
 	DeviceID string  `json:"device_id" example:"b0d34c19-ef5e-4e35-bd30-1d6680245c10"`
 	Name     *string `json:"name"      example:"Pixel 8"`
 	Platform *string `json:"platform"  example:"android"`
 }
 
-// swTokenPair is the data field in auth responses.
-type swTokenPair struct {
+// TokenPair is the data field in auth responses.
+type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
 
-// swDevice is the data field in device responses.
-type swDevice struct {
+// Device is the data field in device responses.
+type Device struct {
 	ID         string  `json:"id"`
 	DeviceID   string  `json:"device_id"`
 	Name       *string `json:"name"`
@@ -56,53 +42,58 @@ type swDevice struct {
 	CreatedAt  string  `json:"created_at"`
 }
 
-// swMe is the data field in GET /v1/me response.
-type swMe struct {
+// Me is the data field in GET /v1/me response.
+type Me struct {
 	ID        string `json:"id"`
 	Email     string `json:"email"`
 	CreatedAt string `json:"created_at"`
 }
 
-// swHealthz is the response for GET /healthz.
-type swHealthz struct {
+// Healthz is the response for GET /healthz.
+type Healthz struct {
 	Status string `json:"status" example:"ok"`
 }
 
-// swErr is the error envelope response.
-type swErr struct {
+// ApiError is the error envelope response.
+type ApiError struct {
 	Data  *string `json:"data"`
 	Error string  `json:"error" example:"unauthorized"`
 }
 
-// Typed envelope wrappers for swagger response docs.
+// Typed envelope wrappers.
 
-type swTokenPairEnv struct {
-	Data  swTokenPair `json:"data"`
-	Error *string     `json:"error"`
-}
-
-type swDeviceEnv struct {
-	Data  swDevice `json:"data"`
-	Error *string  `json:"error"`
-}
-
-type swDevicesEnv struct {
-	Data  []swDevice `json:"data"`
-	Error *string    `json:"error"`
-}
-
-type swMeEnv struct {
-	Data  swMe    `json:"data"`
-	Error *string `json:"error"`
-}
-
-type swHealthzEnv struct {
-	Data  swHealthz `json:"data"`
+// TokenPairEnv is the envelope for auth token responses.
+type TokenPairEnv struct {
+	Data  TokenPair `json:"data"`
 	Error *string   `json:"error"`
 }
 
-// swTrackingPoint is a single raw GPS point in the points list response.
-type swTrackingPoint struct {
+// DeviceEnv is the envelope for single-device responses.
+type DeviceEnv struct {
+	Data  Device  `json:"data"`
+	Error *string `json:"error"`
+}
+
+// DevicesEnv is the envelope for device list responses.
+type DevicesEnv struct {
+	Data  []Device `json:"data"`
+	Error *string  `json:"error"`
+}
+
+// MeEnv is the envelope for GET /v1/me responses.
+type MeEnv struct {
+	Data  Me      `json:"data"`
+	Error *string `json:"error"`
+}
+
+// HealthzEnv is the envelope for GET /healthz responses.
+type HealthzEnv struct {
+	Data  Healthz `json:"data"`
+	Error *string `json:"error"`
+}
+
+// TrackingPoint is a single raw GPS point.
+type TrackingPoint struct {
 	EventID      string   `json:"event_id"`
 	DeviceID     string   `json:"device_id"`
 	RecordedAt   string   `json:"recorded_at"   example:"2026-06-10T12:00:01Z"`
@@ -114,14 +105,14 @@ type swTrackingPoint struct {
 	ActivityType string   `json:"activity_type" example:"walking"`
 }
 
-// swTrackingPointsResponse is the data payload for GET /v1/tracking/points.
-type swTrackingPointsResponse struct {
-	Items      []swTrackingPoint `json:"items"`
-	NextCursor *string           `json:"next_cursor"`
+// TrackingPointsResponse is the data payload for GET /v1/tracking/points.
+type TrackingPointsResponse struct {
+	Items      []TrackingPoint `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
 }
 
-// swTrackingSummary is the data payload for GET /v1/tracking/summary.
-type swTrackingSummary struct {
+// TrackingSummary is the data payload for GET /v1/tracking/summary.
+type TrackingSummary struct {
 	PointsCount     int      `json:"points_count"      example:"123"`
 	FirstRecordedAt *string  `json:"first_recorded_at" example:"2026-06-10T12:00:01Z"`
 	LastRecordedAt  *string  `json:"last_recorded_at"  example:"2026-06-10T12:30:01Z"`
@@ -130,12 +121,14 @@ type swTrackingSummary struct {
 	MaxSpeedMps     *float64 `json:"max_speed_mps"`
 }
 
-type swTrackingPointsEnv struct {
-	Data  swTrackingPointsResponse `json:"data"`
-	Error *string                  `json:"error"`
+// TrackingPointsEnv is the envelope for GET /v1/tracking/points.
+type TrackingPointsEnv struct {
+	Data  TrackingPointsResponse `json:"data"`
+	Error *string                `json:"error"`
 }
 
-type swTrackingSummaryEnv struct {
-	Data  swTrackingSummary `json:"data"`
-	Error *string           `json:"error"`
+// TrackingSummaryEnv is the envelope for GET /v1/tracking/summary.
+type TrackingSummaryEnv struct {
+	Data  TrackingSummary `json:"data"`
+	Error *string         `json:"error"`
 }

@@ -24,5 +24,5 @@ export function App(): React.JSX.Element {
   if (!token) {
     return <AuthScreen onAuth={t => setToken(t)} />;
   }
-  return <TrackerScreen token={token} onSessionExpired={handleSessionExpired} />;
+  return <TrackerScreen onSessionExpired={handleSessionExpired} />;
 }

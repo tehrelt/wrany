@@ -14,10 +14,11 @@ const (
 	maxRangeDays       = 31
 )
 
-// TrackingQueryRepo is the read-only storage interface for raw location points.
+// TrackingQueryRepo is the storage interface for raw location points.
 type TrackingQueryRepo interface {
 	GetPoints(ctx context.Context, filter domain.TrackingPointFilter) ([]domain.TrackingPoint, string, error)
 	GetSummary(ctx context.Context, filter domain.TrackingPointFilter) (domain.TrackingSummary, error)
+	DeletePoint(ctx context.Context, userID, eventID string) error
 }
 
 // TrackingQueryUsecase handles read queries for raw location points.
@@ -90,6 +91,16 @@ func (u *TrackingQueryUsecase) GetSummary(ctx context.Context, in GetSummaryInpu
 		To:       in.To,
 	}
 	return u.repo.GetSummary(ctx, filter)
+}
+
+// DeletePointInput identifies a single point to delete.
+type DeletePointInput struct {
+	UserID  string
+	EventID string
+}
+
+func (u *TrackingQueryUsecase) DeletePoint(ctx context.Context, in DeletePointInput) error {
+	return u.repo.DeletePoint(ctx, in.UserID, in.EventID)
 }
 
 func validateRange(from, to time.Time) error {

@@ -7,10 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { AuthExpiredError } from '../api/httpClient';
+import { AuthExpiredError, getValidToken } from '../api/httpClient';
 import { registerDevice } from '../api/deviceApi';
 import { getOrCreateDeviceId } from '../tracker/deviceId';
-import { getAccessToken } from '../storage/tokenStorage';
 import {
   makeSyntheticEvent,
   requestLocationPermission,
@@ -24,7 +23,6 @@ import {
 } from '../tracker/trackerSocket';
 
 interface Props {
-  token: string;
   onSessionExpired: () => void;
 }
 
@@ -34,7 +32,7 @@ interface Counters {
   rejected: number;
 }
 
-export function TrackerScreen({ token, onSessionExpired }: Props): React.JSX.Element {
+export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
   const [deviceId, setDeviceId] = useState('');
   const [deviceRegistered, setDeviceRegistered] = useState(false);
   const [wsStatus, setWsStatus] = useState<SocketStatus>('disconnected');
@@ -85,8 +83,7 @@ export function TrackerScreen({ token, onSessionExpired }: Props): React.JSX.Ele
   async function handleRegisterDevice(): Promise<void> {
     setLastError(null);
     try {
-      // apiFetch auto-reads token from storage and refreshes if needed.
-      await registerDevice(deviceId, token);
+      await registerDevice(deviceId);
       setDeviceRegistered(true);
     } catch (e) {
       if (e instanceof AuthExpiredError) {
@@ -100,9 +97,11 @@ export function TrackerScreen({ token, onSessionExpired }: Props): React.JSX.Ele
   }
 
   async function handleConnect(): Promise<void> {
-    // Always read from storage — may have been refreshed since login.
-    const currentToken = await getAccessToken();
-    if (!currentToken) {
+    let currentToken: string;
+    try {
+      // getValidToken proactively refreshes if the stored token expires within 60s.
+      currentToken = await getValidToken();
+    } catch {
       onSessionExpired();
       return;
     }

@@ -78,11 +78,35 @@ pipeline for `apps/web` — the web app must never hand-write REST DTOs.
 Vite is the standard fast-build tool for React + TypeScript. No need for CRA or Next.js
 for a pure client-side dashboard.
 
-### Map library
+### UI kit — shadcn/ui + Tailwind CSS
 
-`react-leaflet` + `leaflet` (OpenStreetMap tiles) is the lightest option with no
-API key requirement. Alternatives (Mapbox, Google Maps) require API keys and are
-heavier for MVP.
+`shadcn/ui` generates unstyled, fully-owned components into the project rather than
+depending on a versioned library. Combined with Tailwind CSS it produces a clean,
+accessible dashboard with no bundle overhead from components not used. Chosen over
+heavyweight enterprise kits (MUI, Ant Design) because:
+- no runtime style injection;
+- components live in repo, fully customisable;
+- Tailwind utility classes scale well for dashboards.
+
+Complement with `lucide-react` for icons (tree-shakeable, used by shadcn/ui internally)
+and `sonner` for toast/error notifications (shadcn/ui's recommended toaster).
+
+### Map library — MapLibre GL + react-map-gl
+
+`MapLibre GL JS` is the open-source fork of Mapbox GL JS, with no API key requirement.
+`react-map-gl` wraps MapLibre for React.
+
+Advantages over react-leaflet for this project:
+- GPU-accelerated WebGL rendering — handles thousands of GeoJSON points without DOM overhead;
+- native GeoJSON source/layer model: LineString for track, circle layer for raw points,
+  separate highlight layer for selected point;
+- extensible: clustering, heatmap, animated replay can be added later without replacing
+  the map library;
+- better visual output (vector/raster styles, smooth zoom).
+
+Basemap tile provider is configurable via `VITE_MAP_STYLE_URL` env var.
+Dev fallback: OSM raster tiles via MapLibre's `raster-tiles` source.
+Attribution `© OpenStreetMap contributors` always rendered.
 
 ### Data fetching
 
@@ -148,35 +172,38 @@ GET /v1/tracking/summary  → authMiddleware → trackingQueryHandler.GetSummary
 apps/web/
   src/
     app/
-      App.tsx            — router (react-router-dom v6)
-      queryClient.ts     — react-query QueryClient
+      router.tsx          — createBrowserRouter (react-router-dom v6)
+      providers.tsx       — QueryClientProvider + Toaster
     pages/
       LoginPage.tsx
-      RegisterPage.tsx
       DashboardPage.tsx
     features/
       auth/
         authApi.ts        — calls generated client
-        useAuth.ts        — token state, login/logout
+        useAuth.ts        — token state, login/logout, auth:logout event
         AuthGuard.tsx     — redirect if not authenticated
       devices/
         devicesApi.ts     — calls generated client
         DeviceSelector.tsx
       tracking/
         trackingApi.ts    — calls generated client
-        DateRangePicker.tsx
+        TrackingFilters.tsx  — device select + datetime inputs + refresh button
     components/
-      MapView.tsx         — react-leaflet, polyline + markers
-      PointsTable.tsx     — plain HTML table
-      SummaryCards.tsx    — 6 stat cards
-      LoadingState.tsx
-      ErrorState.tsx
-      EmptyState.tsx
+      ui/                 — shadcn/ui generated components (Button, Card, …)
+      layout/
+        AppLayout.tsx     — topbar (app name, user, logout) + main area
+      map/
+        TrackingMap.tsx   — react-map-gl + MapLibre, GeoJSON source/layers
+        trackingGeoJson.ts — helpers: pointsToGeoJSON (LineString + Points)
+      tracking/
+        PointsTable.tsx   — shadcn/ui Table, columns: time/lat/lon/acc/speed/activity
+        SummaryCards.tsx  — 6 shadcn/ui Cards (count/duration/avg_speed/max_speed/first_at/last_at)
     api/
-      client.ts           — axios base instance, JWT interceptor
+      client.ts           — axios base instance, JWT request interceptor,
+                            401 → single-flight refresh → retry, auth:logout on failure
       generated/          — codegen output (gitignored)
     config/
-      env.ts              — VITE_API_BASE_URL
+      env.ts              — VITE_API_BASE_URL, VITE_MAP_STYLE_URL
   .env.example
   vite.config.ts
   tsconfig.json
@@ -184,6 +211,41 @@ apps/web/
   package.json
   README.md
   Dockerfile.dev
+```
+
+### Dashboard layout
+
+```
+┌─────────────────────────────────────────────────┐
+│ TopBar: "WR any%" | user email | Logout button  │
+├───────────────┬─────────────────────────────────┤
+│ Filter panel  │ Summary cards (6 x Card)        │
+│ ─ Device      ├─────────────────────────────────┤
+│ ─ From date   │ Map (MapLibre GL, full width)   │
+│ ─ To date     │                                 │
+│ ─ Refresh btn ├─────────────────────────────────┤
+│               │ Points Table (shadcn/ui Table)  │
+└───────────────┴─────────────────────────────────┘
+```
+
+### Map rendering
+
+```
+GeoJSON source "tracking":
+  - LineString feature — track polyline
+  - Point features — individual GPS points (properties: recorded_at, speed_mps, …)
+
+Layers:
+  - "track-line"   — line layer, color #3b82f6, width 2
+  - "points-circle" — circle layer, radius 4, color #2563eb
+  - "point-selected" — circle layer, radius 8, color #dc2626, filtered by selected_id
+
+Behavior:
+  - fitBounds to all points on load/data change
+  - click on circle → set selectedPointId → Popup or Sheet with point details
+  - empty state: centered message if no points
+  - loading: Skeleton over map area
+  - error: Alert below filters
 ```
 
 ---
@@ -198,6 +260,13 @@ apps/web/
 - tracking-gateway does not write to `raw_location_points` — read-only queries only.
 - No NATS interaction in the new read path.
 - Web app depends on generated client → must regenerate after backend spec changes.
+- Map tile provider is NOT hardcoded. `VITE_MAP_STYLE_URL` controls the basemap.
+  Dev fallback uses OSM raster tiles; `© OpenStreetMap contributors` attribution always visible.
+  Production should use a dedicated tile provider or self-hosted tiles.
+- Map renders GeoJSON layers (not DOM markers) — scalable to thousands of points.
+- shadcn/ui components are generated into `src/components/ui/` and owned by the repo.
+  Do not update them via `shadcn` CLI without reviewing the diff.
+- `sonner` Toaster is mounted in `providers.tsx`; use `toast.error()` for API errors.
 
 ---
 
@@ -252,48 +321,66 @@ Status: Done (committed with EPIC.md)
 - Output: `apps/web/src/api/generated/`
 - Add to `.gitignore`
 
-### T10 — Init `apps/web` Vite + React + TS project
-- `npm create vite@latest` or manual setup
-- Install dependencies: react-router-dom, react-leaflet, leaflet,
-  @tanstack/react-query, date-fns, axios
-- Dev dependencies: vitest, @types/leaflet, @types/react
+### T10 — Rebuild `apps/web` with new stack
+- Remove old Leaflet dependencies
+- Install new: `maplibre-gl`, `react-map-gl`, `shadcn/ui`, `tailwindcss`,
+  `lucide-react`, `sonner`
+- Init Tailwind CSS (`tailwind.config.ts`, `postcss.config.js`)
+- Run `npx shadcn@latest init` — configure components.json
+- Add shadcn/ui components: Button, Card, Input, Label, Select, Table, Badge,
+  Alert, Skeleton, Sheet, Separator, Toaster (sonner)
+- Update `tsconfig.json` path aliases (`@/`)
+- Update `vite.config.ts` for `@/` alias
 
-### T11 — Configure generated API client
-- `apps/web/src/api/client.ts` — axios instance with JWT interceptor
-- `apps/web/src/config/env.ts` — VITE_API_BASE_URL
+### T11 — Configure API client + env
+- `apps/web/src/api/client.ts` — axios instance, JWT interceptor, refresh cycle
+- `apps/web/src/config/env.ts` — `VITE_API_BASE_URL`, `VITE_MAP_STYLE_URL`
+- `.env.example` — both vars documented
 
-### T12 — Implement auth feature
-- `features/auth/authApi.ts` — register/login using generated client
-- `features/auth/useAuth.ts` — token state (localStorage)
+### T12 — Auth feature
+- `features/auth/authApi.ts` — register/login/refresh via generated client
+- `features/auth/useAuth.ts` — token state, `auth:logout` event listener
 - `features/auth/AuthGuard.tsx`
-- `pages/LoginPage.tsx`, `pages/RegisterPage.tsx`
+- `pages/LoginPage.tsx` — shadcn/ui Card + Input + Button form
+- `app/providers.tsx` — QueryClientProvider + Toaster
+- `app/router.tsx` — createBrowserRouter, /login → LoginPage, / → AuthGuard → DashboardPage
 
-### T13 — Implement device selector
+### T13 — Devices feature
 - `features/devices/devicesApi.ts`
-- `features/devices/DeviceSelector.tsx`
+- `features/devices/DeviceSelector.tsx` — shadcn/ui Select
 
-### T14 — Implement date range picker
-- `features/tracking/DateRangePicker.tsx`
+### T14 — Tracking filters
+- `features/tracking/TrackingFilters.tsx`
+- shadcn/ui Card with: DeviceSelector, datetime inputs (Input type="datetime-local"),
+  Refresh button
 - Defaults: from = now−24h, to = now
 
-### T15 — Implement map view
-- `components/MapView.tsx`
-- react-leaflet, polyline + markers
-- Fit bounds to points
-- Handle empty state
+### T15 — Map component (MapLibre GL)
+- `components/map/trackingGeoJson.ts` — convert `TrackingPoint[]` to GeoJSON
+  FeatureCollection: LineString + Point features
+- `components/map/TrackingMap.tsx` — react-map-gl Map, GeoJSON source,
+  track-line layer, points-circle layer, point-selected layer
+- fitBounds on data change
+- click → selectedPointId state → Sheet with point details
+- Skeleton over map while loading
+- Empty state overlay when no points
 
-### T16 — Implement points table
-- `components/PointsTable.tsx`
-- Columns: recorded_at, device_id, lat, lon, accuracy_m, speed_mps, activity_type
+### T16 — Points table
+- `components/tracking/PointsTable.tsx`
+- shadcn/ui Table
+- Columns: recorded_at, lat, lon, accuracy_m, speed_mps, activity_type
+- Highlight row on selectedPointId sync with map
 
-### T17 — Implement summary cards
-- `components/SummaryCards.tsx`
-- 6 cards: points_count, duration, avg_speed, max_speed, first_at, last_at
+### T17 — Summary cards
+- `components/tracking/SummaryCards.tsx`
+- 6 shadcn/ui Cards: points_count, duration, avg_speed, max_speed, first_at, last_at
+- Skeleton while loading
 
-### T18 — Dashboard page
-- `pages/DashboardPage.tsx`
-- Compose DeviceSelector + DateRangePicker + SummaryCards + MapView + PointsTable
-- Loading/error/empty states for all data
+### T18 — Dashboard page + layout
+- `components/layout/AppLayout.tsx` — topbar (app name, user email, Logout Button)
+- `pages/DashboardPage.tsx` — TrackingFilters sidebar + SummaryCards + TrackingMap + PointsTable
+- TanStack Query: `useQuery` for devices, points, summary
+- Loading/error/empty states wired
 
 ### T19 — Docker Compose web service
 - Add `web` service to `docker-compose.yml`
@@ -324,15 +411,25 @@ Status: Done (committed with EPIC.md)
 - [ ] `GET /v1/tracking/summary` — authenticated, user-isolated
 - [ ] OpenAPI spec includes new endpoints; Swagger UI shows them
 - [ ] TypeScript client regenerated from updated spec
-- [ ] User can register and login from web app
+- [ ] User can login from web app (register page optional for MVP)
 - [ ] User can select device and date range
-- [ ] Raw points appear on Leaflet map
-- [ ] Raw points appear in table
-- [ ] Summary cards show correct stats
+- [ ] `apps/web` uses shadcn/ui + Tailwind CSS (no bare HTML forms/tables)
+- [ ] Dashboard uses shadcn/ui Card, Button, Input, Select, Table, Badge, Skeleton, Alert
+- [ ] Map implemented with MapLibre GL + react-map-gl (not Leaflet)
+- [ ] Track points rendered as GeoJSON circle layer (not DOM markers)
+- [ ] Track rendered as GeoJSON line layer
+- [ ] Selected point highlighted (separate GeoJSON layer, red circle)
+- [ ] Sheet/popup shows selected point details
+- [ ] fitBounds fires when points data changes
+- [ ] Map attribution `© OpenStreetMap contributors` visible
+- [ ] Map tile provider configurable via `VITE_MAP_STYLE_URL` env var
+- [ ] Raw points appear in shadcn/ui Table
+- [ ] Summary cards show correct stats (6 cards)
 - [ ] Unauthenticated request to `/v1/tracking/points` → 401
 - [ ] User A cannot see user B's points
 - [ ] Empty state renders correctly (no points in range)
-- [ ] Loading and error states render correctly
+- [ ] Loading skeleton renders on map and cards while data fetches
+- [ ] Error alert renders on fetch failure
 - [ ] `make test` passes
 - [ ] Manual E2E: Android → backend → web flow verified
 
@@ -391,6 +488,32 @@ Status: Done (committed with EPIC.md)
 ---
 
 ## Implementation Log
+
+### 2026-06-11 — T10–T19 implemented: shadcn/ui + MapLibre + new layout
+
+- Tailwind v4 + @tailwindcss/vite plugin configured
+- shadcn/ui components written: Button, Card, Input, Label, Select, Table, Badge, Alert, Skeleton, Sheet, Separator, Sonner
+- `@/` path alias in tsconfig + vite
+- MapLibre GL + react-map-gl v8: TrackingMap with GeoJSON source, track-line/points-circle/point-selected layers
+- fitBounds on data change, click → Sheet with point details
+- OSM raster fallback style, VITE_MAP_STYLE_URL env var
+- AppLayout: topbar + filter sidebar + main content area
+- SummaryCards, PointsTable — shadcn/ui Card/Table
+- TrackingFilters replaces DateRangePicker
+- LoginPage/DashboardPage rewritten with shadcn/ui
+- Login + Register merged into single LoginPage (mode toggle)
+- 6 tests pass, `npm run build` succeeds
+
+### 2026-06-11 — Stack update: shadcn/ui + MapLibre (plan only)
+
+EPIC.md updated to reflect new frontend stack:
+- UI kit: shadcn/ui + Tailwind CSS + lucide-react + sonner (replaces bare HTML)
+- Map: MapLibre GL + react-map-gl (replaces react-leaflet)
+- Map rendering: GeoJSON source/layers instead of DOM markers
+- Dashboard layout: topbar + filter sidebar + summary + map + table
+- `VITE_MAP_STYLE_URL` env var for tile provider
+- Tasks T10–T18 rewritten for new stack
+- Acceptance Criteria expanded
 
 ### 2026-06-11 — JWT refresh cycle (Android + web)
 

@@ -1,4 +1,4 @@
-import { apiClient } from '../../api/client'
+import { getAuth } from '@/api/generated/auth/auth'
 
 export interface TokenPair {
   access_token: string
@@ -15,19 +15,19 @@ export interface LoginInput {
   password: string
 }
 
+const api = getAuth()
+
 export async function register(input: RegisterInput): Promise<TokenPair> {
-  const res = await apiClient.post<{ data: TokenPair }>('/v1/auth/register', input)
-  return res.data.data
+  const env = await api.postV1AuthRegister({ email: input.email, password: input.password })
+  return env.data as TokenPair
 }
 
 export async function login(input: LoginInput): Promise<TokenPair> {
-  const res = await apiClient.post<{ data: TokenPair }>('/v1/auth/login', input)
-  return res.data.data
+  const env = await api.postV1AuthLogin({ email: input.email, password: input.password })
+  return env.data as TokenPair
 }
 
 export async function refreshTokens(refreshToken: string): Promise<TokenPair> {
-  const res = await apiClient.post<{ data: TokenPair }>('/v1/auth/refresh', {
-    refresh_token: refreshToken,
-  })
-  return res.data.data
+  const env = await api.postV1AuthRefresh({ refresh_token: refreshToken })
+  return env.data as TokenPair
 }

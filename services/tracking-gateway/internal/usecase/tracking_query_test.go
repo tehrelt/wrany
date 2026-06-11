@@ -36,6 +36,10 @@ func (s *stubTrackingQueryRepo) GetSummary(
 	return s.summary, s.err
 }
 
+func (s *stubTrackingQueryRepo) DeletePoint(_ context.Context, _, _ string) error {
+	return s.err
+}
+
 var (
 	now  = time.Now().UTC()
 	from = now.Add(-1 * time.Hour)

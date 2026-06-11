@@ -22,11 +22,11 @@ func NewDeviceHandler(devices *usecase.DeviceUsecase) *DeviceHandler {
 // @Tags         devices
 // @Accept       json
 // @Produce      json
-// @Param        body  body      swRegisterDeviceReq  true  "Device registration"
-// @Success      201   {object}  swDeviceEnv
-// @Failure      400   {object}  swErr
-// @Failure      401   {object}  swErr
-// @Failure      422   {object}  swErr
+// @Param        body  body      RegisterDeviceReq  true  "Device registration"
+// @Success      201   {object}  DeviceEnv
+// @Failure      400   {object}  ApiError
+// @Failure      401   {object}  ApiError
+// @Failure      422   {object}  ApiError
 // @Security     BearerAuth
 // @Router       /v1/devices/register [post]
 func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body swRegisterDeviceReq
+	var body RegisterDeviceReq
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -66,8 +66,8 @@ func (h *DeviceHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 // @Summary      List current user's devices
 // @Tags         devices
 // @Produce      json
-// @Success      200  {object}  swDevicesEnv
-// @Failure      401  {object}  swErr
+// @Success      200  {object}  DevicesEnv
+// @Failure      401  {object}  ApiError
 // @Security     BearerAuth
 // @Router       /v1/devices [get]
 func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request) {

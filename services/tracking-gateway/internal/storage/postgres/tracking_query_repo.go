@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/wrany/tracking-gateway/internal/domain"
@@ -102,6 +103,22 @@ func (r *TrackingQueryRepo) GetPoints(
 	}
 
 	return points, nextCursor, nil
+}
+
+// DeletePoint removes a single raw location point owned by userID.
+// Returns pgx.ErrNoRows (mapped upstream to ErrNotFound) if not found or not owned.
+func (r *TrackingQueryRepo) DeletePoint(ctx context.Context, userID, eventID string) error {
+	tag, err := r.db.Exec(ctx,
+		`DELETE FROM raw_location_points WHERE event_id = $1 AND user_id = $2`,
+		eventID, userID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // GetSummary returns aggregated stats for the given filter.

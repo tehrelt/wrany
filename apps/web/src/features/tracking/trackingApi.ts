@@ -1,4 +1,4 @@
-import { apiClient } from '../../api/client'
+import { getTracking } from '@/api/generated/tracking/tracking'
 
 export interface TrackingPoint {
   event_id: string
@@ -34,24 +34,32 @@ export interface PointsResponse {
   next_cursor: string | null
 }
 
-export async function getPoints(filter: PointsFilter): Promise<PointsResponse> {
-  const params = new URLSearchParams()
-  if (filter.device_id) params.set('device_id', filter.device_id)
-  params.set('from', filter.from)
-  params.set('to', filter.to)
-  if (filter.limit) params.set('limit', String(filter.limit))
-  if (filter.cursor) params.set('cursor', filter.cursor)
+const api = getTracking()
 
-  const res = await apiClient.get<{ data: PointsResponse }>(`/v1/tracking/points?${params}`)
-  return res.data.data
+export async function getPoints(filter: PointsFilter): Promise<PointsResponse> {
+  const env = await api.getV1TrackingPoints({
+    device_id: filter.device_id,
+    from: filter.from,
+    to: filter.to,
+    limit: filter.limit,
+    cursor: filter.cursor,
+  })
+  const data = env.data
+  return {
+    items: (data?.items ?? []) as TrackingPoint[],
+    next_cursor: data?.next_cursor ?? null,
+  }
 }
 
 export async function getSummary(filter: Omit<PointsFilter, 'limit' | 'cursor'>): Promise<TrackingSummary> {
-  const params = new URLSearchParams()
-  if (filter.device_id) params.set('device_id', filter.device_id)
-  params.set('from', filter.from)
-  params.set('to', filter.to)
+  const env = await api.getV1TrackingSummary({
+    device_id: filter.device_id,
+    from: filter.from,
+    to: filter.to,
+  })
+  return env.data as TrackingSummary
+}
 
-  const res = await apiClient.get<{ data: TrackingSummary }>(`/v1/tracking/summary?${params}`)
-  return res.data.data
+export async function deletePoint(eventId: string): Promise<void> {
+  await api.deleteV1TrackingPointsEventId(eventId)
 }

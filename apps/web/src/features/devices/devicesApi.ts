@@ -1,4 +1,4 @@
-import { apiClient } from '../../api/client'
+import { getDevices } from '@/api/generated/devices/devices'
 
 export interface Device {
   id: string
@@ -9,7 +9,9 @@ export interface Device {
   created_at: string
 }
 
+const api = getDevices()
+
 export async function listDevices(): Promise<Device[]> {
-  const res = await apiClient.get<{ data: Device[] }>('/v1/devices')
-  return res.data.data ?? []
+  const env = await api.getV1Devices()
+  return (env.data ?? []) as Device[]
 }

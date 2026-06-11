@@ -1,9 +1,12 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/wrany/tracking-gateway/internal/usecase"
 )
@@ -25,9 +28,9 @@ func NewTrackingQueryHandler(uc *usecase.TrackingQueryUsecase) *TrackingQueryHan
 // @Param        to         query     string  true   "End of time range (RFC3339)"
 // @Param        limit      query     int     false  "Max results per page (default 1000, max 5000)"
 // @Param        cursor     query     string  false  "Pagination cursor from previous response"
-// @Success      200        {object}  swTrackingPointsEnv
-// @Failure      400        {object}  swErr
-// @Failure      401        {object}  swErr
+// @Success      200        {object}  TrackingPointsEnv
+// @Failure      400        {object}  ApiError
+// @Failure      401        {object}  ApiError
 // @Security     BearerAuth
 // @Router       /v1/tracking/points [get]
 func (h *TrackingQueryHandler) GetPoints(w http.ResponseWriter, r *http.Request) {
@@ -64,9 +67,9 @@ func (h *TrackingQueryHandler) GetPoints(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	items := make([]swTrackingPoint, 0, len(points))
+	items := make([]TrackingPoint, 0, len(points))
 	for _, p := range points {
-		items = append(items, swTrackingPoint{
+		items = append(items, TrackingPoint{
 			EventID:      p.EventID,
 			DeviceID:     p.DeviceID,
 			RecordedAt:   p.RecordedAt.UTC().Format(time.RFC3339),
@@ -84,7 +87,7 @@ func (h *TrackingQueryHandler) GetPoints(w http.ResponseWriter, r *http.Request)
 		cursor = &nextCursor
 	}
 
-	writeJSON(w, http.StatusOK, swTrackingPointsResponse{
+	writeJSON(w, http.StatusOK, TrackingPointsResponse{
 		Items:      items,
 		NextCursor: cursor,
 	})
@@ -97,9 +100,9 @@ func (h *TrackingQueryHandler) GetPoints(w http.ResponseWriter, r *http.Request)
 // @Param        device_id  query     string  false  "Filter by device UUID"
 // @Param        from       query     string  true   "Start of time range (RFC3339)"
 // @Param        to         query     string  true   "End of time range (RFC3339)"
-// @Success      200        {object}  swTrackingSummaryEnv
-// @Failure      400        {object}  swErr
-// @Failure      401        {object}  swErr
+// @Success      200        {object}  TrackingSummaryEnv
+// @Failure      400        {object}  ApiError
+// @Failure      401        {object}  ApiError
 // @Security     BearerAuth
 // @Router       /v1/tracking/summary [get]
 func (h *TrackingQueryHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +135,7 @@ func (h *TrackingQueryHandler) GetSummary(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp := swTrackingSummary{
+	resp := TrackingSummary{
 		PointsCount: summary.PointsCount,
 		DurationSec: summary.DurationSec,
 		AvgSpeedMps: summary.AvgSpeedMps,
@@ -148,6 +151,43 @@ func (h *TrackingQueryHandler) GetSummary(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// DeletePoint godoc
+// @Summary      Delete a single GPS point by event_id
+// @Tags         tracking
+// @Param        event_id  path  string  true  "Event UUID"
+// @Success      204
+// @Failure      401  {object}  ApiError
+// @Failure      404  {object}  ApiError
+// @Security     BearerAuth
+// @Router       /v1/tracking/points/{event_id} [delete]
+func (h *TrackingQueryHandler) DeletePoint(w http.ResponseWriter, r *http.Request) {
+	userID, ok := UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	eventID := r.PathValue("event_id")
+	if eventID == "" {
+		writeError(w, http.StatusBadRequest, "event_id is required")
+		return
+	}
+
+	if err := h.uc.DeletePoint(r.Context(), usecase.DeletePointInput{
+		UserID:  userID.String(),
+		EventID: eventID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "point not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func parseDateRange(fromStr, toStr string) (time.Time, time.Time, error) {

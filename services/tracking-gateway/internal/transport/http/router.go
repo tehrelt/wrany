@@ -37,6 +37,7 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	mux.Handle("GET /v1/me", auth(http.HandlerFunc(meH.GetMe)))
 	mux.Handle("GET /v1/tracking/points", auth(http.HandlerFunc(trackingQueryH.GetPoints)))
 	mux.Handle("GET /v1/tracking/summary", auth(http.HandlerFunc(trackingQueryH.GetSummary)))
+	mux.Handle("DELETE /v1/tracking/points/{event_id}", auth(http.HandlerFunc(trackingQueryH.DeletePoint)))
 	wsAuth := WSAuthMiddleware(deps.JWTSecret)
 	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 
