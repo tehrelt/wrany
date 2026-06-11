@@ -332,3 +332,74 @@ Also establishes the OpenAPI generation pipeline: backend annotations → genera
 - Swagger UI accessible at `http://localhost:8088`
 - Android app builds and connects to backend
 - Full manual E2E flow works: register → login → device registration → WS connect → session.start → location.batch → ack → DB row verified
+
+---
+
+# EPIC 07: Web Client MVP — Tracking Data Viewer
+
+## Goal
+
+Create a web client that allows the user to:
+1. Log in
+2. See a list of their devices
+3. Select a device
+4. Select a time period
+5. See raw GPS points on a map
+6. See a table of points
+7. See simple statistics for the selected period
+
+This is an MVP viewer/debug dashboard, not a full route analytics UI.
+
+## Scope
+
+### Backend (tracking-gateway)
+- `GET /v1/tracking/points` — paginated raw location points for authenticated user
+- `GET /v1/tracking/summary` — aggregated stats for a time range
+- Clean Architecture: domain types → usecase → storage (postgres) → HTTP handler
+- swaggo annotations on both endpoints
+- User isolation: always filter by user_id from JWT
+- Cursor-based pagination (limit capped at 5000)
+
+### OpenAPI / TypeScript codegen
+- Updated tracking-gateway OpenAPI spec with new endpoints
+- Updated combined spec
+- Regenerated TypeScript client in `apps/web/src/api/generated/`
+- `make ts-client` target if not already present
+
+### Web app (`apps/web`)
+- React + TypeScript + Vite
+- Auth pages: login, register
+- Dashboard: device selector, date range picker, map, table, summary cards
+- Map: react-leaflet + OpenStreetMap tiles
+- Data fetching: @tanstack/react-query
+- Generated TypeScript API client for all REST calls
+- Token in localStorage (MVP)
+- Docker dev service at http://localhost:3000
+
+## Out of Scope
+- TripDetectionEngine
+- Route matching, best lap, loop detection
+- Analytics by route
+- Charts beyond summary cards
+- User profile editing
+- Admin panel
+- Android changes
+- WebSocket tracking from web
+- Map editing or point deletion
+
+## Dependencies
+- EPIC 1, 2, 3, 4, 5, 6
+
+## Acceptance Criteria
+- `apps/web` exists and builds (`npm run build` succeeds)
+- Web app uses generated TypeScript API client for all REST calls
+- `GET /v1/tracking/points` — authenticated, user-isolated, paginated
+- `GET /v1/tracking/summary` — authenticated, user-isolated
+- OpenAPI spec updated; TypeScript client regenerated
+- User can login/register from web app
+- User can select device + date range and see points on map + table
+- Summary cards display correct stats
+- User cannot query another user's points
+- Empty/loading/error states work
+- `make test` passes
+- Manual E2E: Android sends point → worker stores → web displays it
