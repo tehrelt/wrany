@@ -21,6 +21,8 @@ type Config struct {
 	NatsConsumerMaxDeliver      int
 	NatsConsumerBatchSize       int
 	NatsConsumerPollTimeoutSec  int
+
+	TripDetectionIntervalSec int
 }
 
 // Load reads configuration from environment variables.
@@ -46,6 +48,7 @@ func Load() (Config, error) {
 		NatsConsumerMaxDeliver:      envInt("NATS_CONSUMER_MAX_DELIVER", 5),
 		NatsConsumerBatchSize:       envInt("NATS_CONSUMER_BATCH_SIZE", 100),
 		NatsConsumerPollTimeoutSec:  envInt("NATS_CONSUMER_POLL_TIMEOUT_SEC", 5),
+		TripDetectionIntervalSec:    envInt("TRIP_DETECTION_INTERVAL_SEC", 30),
 	}, nil
 }
 

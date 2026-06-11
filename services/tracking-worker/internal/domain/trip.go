@@ -114,3 +114,49 @@ func DefaultTripDetectionConfig() TripDetectionConfig {
 		LateArrivalWindowSec: 300,
 	}
 }
+
+// UserDevicePair identifies a tracked device session.
+type UserDevicePair struct {
+	UserID   uuid.UUID
+	DeviceID uuid.UUID
+}
+
+// TripStatsDelta carries incremental stats for an ongoing trip update.
+type TripStatsDelta struct {
+	TripID     uuid.UUID
+	DeltaDistM float64
+	DeltaPts   int
+	LastPtAt   *time.Time
+	LastLat    *float64
+	LastLon    *float64
+}
+
+// TripCompletion carries the end-of-trip fields.
+type TripCompletion struct {
+	TripID  uuid.UUID
+	EndedAt time.Time
+	EndLat  float64
+	EndLon  float64
+}
+
+// TripDetectionBatch describes all persistence operations for one detection cycle.
+// Applied atomically by the repository inside a single transaction.
+type TripDetectionBatch struct {
+	NewState TripDetectionState
+
+	// Trips to INSERT.
+	NewTrips []*Trip
+	// BackfillSince: for each new trip, the repository must also link raw_location_points
+	// with recorded_at in [BackfillSince[tripID], first NewPoint for that trip)
+	// into trip_points (ON CONFLICT DO NOTHING for idempotency).
+	BackfillSince map[uuid.UUID]time.Time
+
+	// Incremental stats for existing trips.
+	UpdatedTrips []TripStatsDelta
+
+	// Trips to mark as TRIP_COMPLETED.
+	CompletedTrips []TripCompletion
+
+	// All TripPoints to INSERT (ON CONFLICT DO NOTHING).
+	NewPoints []TripPoint
+}
