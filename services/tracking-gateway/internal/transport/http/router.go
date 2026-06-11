@@ -32,7 +32,8 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	mux.Handle("POST /v1/devices/register", auth(http.HandlerFunc(deviceH.RegisterDevice)))
 	mux.Handle("GET /v1/devices", auth(http.HandlerFunc(deviceH.ListDevices)))
 	mux.Handle("GET /v1/me", auth(http.HandlerFunc(meH.GetMe)))
-	mux.Handle("GET /v1/ws/tracker", auth(trackerH))
+	wsAuth := WSAuthMiddleware(deps.JWTSecret)
+	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 
 	return mux
 }

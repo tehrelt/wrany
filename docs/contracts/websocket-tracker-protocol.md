@@ -9,6 +9,24 @@ Authorization: Bearer <access_token>
 
 HTTP upgrade to WebSocket. JWT is required before upgrade. Unauthenticated connections receive HTTP 401 and are not upgraded.
 
+### Authentication fallback for React Native Android
+
+React Native's built-in `WebSocket` API does not support custom headers on the HTTP upgrade request on Android. As a workaround, the server accepts the access token as a query parameter for this endpoint only:
+
+```
+GET /v1/ws/tracker?access_token=<access_token>
+```
+
+Priority: `Authorization` header always takes precedence over `?access_token=`.
+
+The query parameter fallback applies **only** to `GET /v1/ws/tracker`. All other protected REST endpoints accept the `Authorization` header exclusively.
+
+**Security notes:**
+- Always use WSS (TLS) in production to prevent token exposure in transit.
+- Use a short-lived access token (default TTL: 15 minutes).
+- The server never logs the request URL or query string to prevent token leakage in logs.
+- Refresh tokens must never be used as the `access_token` query parameter.
+
 ## Origin Policy
 
 - **Empty origin**: always allowed (Android / non-browser clients).
