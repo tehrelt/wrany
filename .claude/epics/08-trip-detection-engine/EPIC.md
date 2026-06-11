@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+In Progress
 
 ---
 
@@ -388,6 +388,38 @@ TripDetectionUseCase → domain.Trip (no external deps)
 - `make migrate-worker-up` — ручное применение (production/dev).
 - Тесты: `testcontainers` + `migrations.RunWithTable` применяет все файлы автоматически.
 - Существующие тесты не затронуты — новые таблицы добавляются поверх `raw_location_points`.
+
+### Phase 2: Domain types + state machine usecase + unit tests (2026-06-11)
+
+**Созданы файлы:**
+- `internal/domain/trip.go` — TripStatus, TripState, Trip, TripPoint, TripDetectionState, TripDetectionConfig + DefaultTripDetectionConfig(), batch types (UserDevicePair, TripStatsDelta, TripCompletion, TripDetectionBatch).
+- `internal/usecase/trip_detection.go` — TripDetectionUseCase.ProcessBatch: чистая state machine без I/O. CommandKind (CmdCreateTrip/CmdUpdateTrip/CmdCompleteTrip), TripCommand, ProcessBatchResult.
+- `internal/usecase/trip_detection_test.go` — 16 unit-тестов, все PASS.
+
+**Ключевые решения:**
+- Sensor speed authoritative: `if pt.SpeedMps != nil { effectiveSpeed = *pt.SpeedMps }`.
+- GPS jump → skip без обновления LastPointLat/Lon.
+- flushActive() closure перед любым переходом из TRIP_ACTIVE.
+- Watermark advance: `LastWatermarkAt = now - LateArrivalWindowSec`.
+- Batch types перенесены в domain (не usecase) — чтобы storage мог импортировать без циклических зависимостей.
+- Добавлена migration 0005 для cross-batch полей (CandidateDistanceM, CandidateStartLat/Lon, LastPointLat/Lon).
+
+---
+
+### Phase 3: Storage + job + app wiring (2026-06-11)
+
+**Созданы файлы:**
+- `internal/storage/postgres/trip_repo.go` — TripRepo implements TripDetectionRepository:
+  LoadDistinctUserDevicePairs (LEFT JOIN watermark), LoadState (default IDLE), FetchPoints ([from, to) ASC), ApplyBatch (single tx: insertTrip → backfillTripPoints → insertTripPoints → updateTripStats → completeTrip → upsertDetectionState).
+- `internal/usecase/trip_detection_job.go` — TripDetectionJob.RunOnce: watermark boundary, processPair (load state → fetch → ProcessBatch → buildBatch → ApplyBatch → publishEvents), события trip.started/updated/completed v1.
+- `internal/storage/postgres/trip_repo_test.go` — integration tests: LoadDistinctUserDevicePairs, LoadState (default + persisted), FetchPoints (window + order), ApplyBatch (insert/update/complete trip, idempotent trip_points, upsert state).
+
+**Обновлены файлы:**
+- `internal/config/config.go` — TripDetectionIntervalSec (TRIP_DETECTION_INTERVAL_SEC, default 30).
+- `internal/app/app.go` — wire TripRepo + TripDetectionJob, goroutine с ticker в Run(), импорт domain.
+
+**Коммиты:**
+- `dd71a34` epic(08): add trip detection storage, job, and app wiring (Phase 3)
 
 ---
 
