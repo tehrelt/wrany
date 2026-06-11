@@ -1,4 +1,0 @@
-# Swagger UI — spec is served by tracking-gateway at /swagger/doc.json.
-# No build step needed; the service generates and serves the spec at runtime.
-FROM swaggerapi/swagger-ui:latest
-ENV SWAGGER_JSON_URL=http://host.docker.internal:8080/swagger/doc.json
