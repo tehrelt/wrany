@@ -1,10 +1,20 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { login as apiLogin, register as apiRegister, LoginInput, RegisterInput } from './authApi'
+import { LOGOUT_EVENT } from '../../api/client'
 
 export function useAuth() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('access_token'))
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Listen for forced logout emitted by the axios interceptor when refresh fails.
+  useEffect(() => {
+    function handleLogout() {
+      setToken(null)
+    }
+    window.addEventListener(LOGOUT_EVENT, handleLogout)
+    return () => window.removeEventListener(LOGOUT_EVENT, handleLogout)
+  }, [])
 
   const saveTokens = useCallback((accessToken: string, refreshToken: string) => {
     localStorage.setItem('access_token', accessToken)

@@ -24,3 +24,10 @@ export async function login(input: LoginInput): Promise<TokenPair> {
   const res = await apiClient.post<{ data: TokenPair }>('/v1/auth/login', input)
   return res.data.data
 }
+
+export async function refreshTokens(refreshToken: string): Promise<TokenPair> {
+  const res = await apiClient.post<{ data: TokenPair }>('/v1/auth/refresh', {
+    refresh_token: refreshToken,
+  })
+  return res.data.data
+}

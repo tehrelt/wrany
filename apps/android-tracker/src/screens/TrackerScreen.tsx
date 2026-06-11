@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AuthExpiredError } from '../api/httpClient';
 import { registerDevice } from '../api/deviceApi';
 import { getOrCreateDeviceId } from '../tracker/deviceId';
+import { getAccessToken } from '../storage/tokenStorage';
 import {
   makeSyntheticEvent,
   requestLocationPermission,
@@ -23,6 +25,7 @@ import {
 
 interface Props {
   token: string;
+  onSessionExpired: () => void;
 }
 
 interface Counters {
@@ -31,7 +34,7 @@ interface Counters {
   rejected: number;
 }
 
-export function TrackerScreen({ token }: Props): React.JSX.Element {
+export function TrackerScreen({ token, onSessionExpired }: Props): React.JSX.Element {
   const [deviceId, setDeviceId] = useState('');
   const [deviceRegistered, setDeviceRegistered] = useState(false);
   const [wsStatus, setWsStatus] = useState<SocketStatus>('disconnected');
@@ -82,20 +85,31 @@ export function TrackerScreen({ token }: Props): React.JSX.Element {
   async function handleRegisterDevice(): Promise<void> {
     setLastError(null);
     try {
+      // apiFetch auto-reads token from storage and refreshes if needed.
       await registerDevice(deviceId, token);
       setDeviceRegistered(true);
     } catch (e) {
+      if (e instanceof AuthExpiredError) {
+        onSessionExpired();
+        return;
+      }
       setLastError(
         e instanceof Error ? e.message : 'Device registration failed',
       );
     }
   }
 
-  function handleConnect(): void {
+  async function handleConnect(): Promise<void> {
+    // Always read from storage — may have been refreshed since login.
+    const currentToken = await getAccessToken();
+    if (!currentToken) {
+      onSessionExpired();
+      return;
+    }
     if (!socketRef.current) {
       socketRef.current = new TrackerSocket(callbacks);
     }
-    socketRef.current.connect(token, deviceId);
+    socketRef.current.connect(currentToken, deviceId);
   }
 
   function handleDisconnect(): void {

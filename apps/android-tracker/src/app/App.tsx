@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAccessToken } from '../storage/tokenStorage';
+import { clearTokens, getAccessToken } from '../storage/tokenStorage';
 import { AuthScreen } from '../screens/AuthScreen';
 import { TrackerScreen } from '../screens/TrackerScreen';
 
@@ -14,10 +14,15 @@ export function App(): React.JSX.Element {
     });
   }, []);
 
+  function handleSessionExpired(): void {
+    clearTokens().catch(() => {});
+    setToken(null);
+  }
+
   if (loading) return <></>;
 
   if (!token) {
     return <AuthScreen onAuth={t => setToken(t)} />;
   }
-  return <TrackerScreen token={token} />;
+  return <TrackerScreen token={token} onSessionExpired={handleSessionExpired} />;
 }
