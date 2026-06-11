@@ -28,7 +28,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swHealthzEnv"
+                            "$ref": "#/definitions/http.HealthzEnv"
                         }
                     }
                 }
@@ -53,7 +53,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swLoginReq"
+                            "$ref": "#/definitions/http.LoginReq"
                         }
                     }
                 ],
@@ -61,19 +61,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swTokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -98,7 +98,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swRefreshReq"
+                            "$ref": "#/definitions/http.RefreshReq"
                         }
                     }
                 ],
@@ -106,19 +106,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swTokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -143,7 +143,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swRegisterReq"
+                            "$ref": "#/definitions/http.RegisterReq"
                         }
                     }
                 ],
@@ -151,25 +151,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swTokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -193,13 +193,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swDevicesEnv"
+                            "$ref": "#/definitions/http.DevicesEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -229,7 +229,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swRegisterDeviceReq"
+                            "$ref": "#/definitions/http.RegisterDeviceReq"
                         }
                     }
                 ],
@@ -237,25 +237,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swDeviceEnv"
+                            "$ref": "#/definitions/http.DeviceEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -279,13 +279,180 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swMeEnv"
+                            "$ref": "#/definitions/http.MeEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.swErr"
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tracking/points": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "List raw GPS points for the authenticated user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 1000, max 5000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.TrackingPointsEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tracking/points/{event_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "Delete a single GPS point by event_id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event UUID",
+                        "name": "event_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tracking/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "Get aggregated stats for a time range",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.TrackingSummaryEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -293,7 +460,19 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal_transport_http.swDevice": {
+        "http.ApiError": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "unauthorized"
+                }
+            }
+        },
+        "http.Device": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -316,24 +495,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swDeviceEnv": {
+        "http.DeviceEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.swDevice"
+                    "$ref": "#/definitions/http.Device"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.swDevicesEnv": {
+        "http.DevicesEnv": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.swDevice"
+                        "$ref": "#/definitions/http.Device"
                     }
                 },
                 "error": {
@@ -341,19 +520,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swErr": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string",
-                    "example": "unauthorized"
-                }
-            }
-        },
-        "internal_transport_http.swHealthz": {
+        "http.Healthz": {
             "type": "object",
             "properties": {
                 "status": {
@@ -362,18 +529,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swHealthzEnv": {
+        "http.HealthzEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.swHealthz"
+                    "$ref": "#/definitions/http.Healthz"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.swLoginReq": {
+        "http.LoginReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -384,7 +551,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swMe": {
+        "http.Me": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -398,18 +565,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swMeEnv": {
+        "http.MeEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.swMe"
+                    "$ref": "#/definitions/http.Me"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.swRefreshReq": {
+        "http.RefreshReq": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -417,7 +584,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swRegisterDeviceReq": {
+        "http.RegisterDeviceReq": {
             "type": "object",
             "properties": {
                 "device_id": {
@@ -434,7 +601,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swRegisterReq": {
+        "http.RegisterReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -447,7 +614,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swTokenPair": {
+        "http.TokenPair": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -458,11 +625,111 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.swTokenPairEnv": {
+        "http.TokenPairEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.swTokenPair"
+                    "$ref": "#/definitions/http.TokenPair"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.TrackingPoint": {
+            "type": "object",
+            "properties": {
+                "accuracy_m": {
+                    "type": "number",
+                    "example": 8.5
+                },
+                "activity_type": {
+                    "type": "string",
+                    "example": "walking"
+                },
+                "bearing_deg": {
+                    "type": "number"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number",
+                    "example": 55.751244
+                },
+                "lon": {
+                    "type": "number",
+                    "example": 37.618423
+                },
+                "recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                },
+                "speed_mps": {
+                    "type": "number"
+                }
+            }
+        },
+        "http.TrackingPointsEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/http.TrackingPointsResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.TrackingPointsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.TrackingPoint"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.TrackingSummary": {
+            "type": "object",
+            "properties": {
+                "avg_speed_mps": {
+                    "type": "number"
+                },
+                "duration_sec": {
+                    "type": "integer",
+                    "example": 1800
+                },
+                "first_recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                },
+                "last_recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:30:01Z"
+                },
+                "max_speed_mps": {
+                    "type": "number"
+                },
+                "points_count": {
+                    "type": "integer",
+                    "example": 123
+                }
+            }
+        },
+        "http.TrackingSummaryEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/http.TrackingSummary"
                 },
                 "error": {
                     "type": "string"

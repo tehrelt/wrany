@@ -18,8 +18,8 @@ func NewMeHandler(me *usecase.MeUsecase) *MeHandler {
 // @Summary      Get current user
 // @Tags         users
 // @Produce      json
-// @Success      200  {object}  swMeEnv
-// @Failure      401  {object}  swErr
+// @Success      200  {object}  MeEnv
+// @Failure      401  {object}  ApiError
 // @Security     BearerAuth
 // @Router       /v1/me [get]
 func (h *MeHandler) GetMe(w http.ResponseWriter, r *http.Request) {

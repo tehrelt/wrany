@@ -15,6 +15,10 @@ export async function getAccessToken(): Promise<string | null> {
   return AsyncStorage.getItem(ACCESS_KEY);
 }
 
+export async function getRefreshToken(): Promise<string | null> {
+  return AsyncStorage.getItem(REFRESH_KEY);
+}
+
 export async function clearTokens(): Promise<void> {
   await AsyncStorage.removeItem(ACCESS_KEY);
   await AsyncStorage.removeItem(REFRESH_KEY);

@@ -1,0 +1,482 @@
+basePath: /
+definitions:
+  http.ApiError:
+    properties:
+      data:
+        type: string
+      error:
+        example: unauthorized
+        type: string
+    type: object
+  http.Device:
+    properties:
+      created_at:
+        type: string
+      device_id:
+        type: string
+      id:
+        type: string
+      last_seen_at:
+        type: string
+      name:
+        type: string
+      platform:
+        type: string
+    type: object
+  http.DeviceEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.Device'
+      error:
+        type: string
+    type: object
+  http.DevicesEnv:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/http.Device'
+        type: array
+      error:
+        type: string
+    type: object
+  http.Healthz:
+    properties:
+      status:
+        example: ok
+        type: string
+    type: object
+  http.HealthzEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.Healthz'
+      error:
+        type: string
+    type: object
+  http.LoginReq:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  http.Me:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+    type: object
+  http.MeEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.Me'
+      error:
+        type: string
+    type: object
+  http.RefreshReq:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  http.RegisterDeviceReq:
+    properties:
+      device_id:
+        example: b0d34c19-ef5e-4e35-bd30-1d6680245c10
+        type: string
+      name:
+        example: Pixel 8
+        type: string
+      platform:
+        example: android
+        type: string
+    type: object
+  http.RegisterReq:
+    properties:
+      email:
+        example: rider@example.com
+        type: string
+      password:
+        example: hunter2
+        type: string
+    type: object
+  http.TokenPair:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  http.TokenPairEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.TokenPair'
+      error:
+        type: string
+    type: object
+  http.TrackingPoint:
+    properties:
+      accuracy_m:
+        example: 8.5
+        type: number
+      activity_type:
+        example: walking
+        type: string
+      bearing_deg:
+        type: number
+      device_id:
+        type: string
+      event_id:
+        type: string
+      lat:
+        example: 55.751244
+        type: number
+      lon:
+        example: 37.618423
+        type: number
+      recorded_at:
+        example: "2026-06-10T12:00:01Z"
+        type: string
+      speed_mps:
+        type: number
+    type: object
+  http.TrackingPointsEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.TrackingPointsResponse'
+      error:
+        type: string
+    type: object
+  http.TrackingPointsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/http.TrackingPoint'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+  http.TrackingSummary:
+    properties:
+      avg_speed_mps:
+        type: number
+      duration_sec:
+        example: 1800
+        type: integer
+      first_recorded_at:
+        example: "2026-06-10T12:00:01Z"
+        type: string
+      last_recorded_at:
+        example: "2026-06-10T12:30:01Z"
+        type: string
+      max_speed_mps:
+        type: number
+      points_count:
+        example: 123
+        type: integer
+    type: object
+  http.TrackingSummaryEnv:
+    properties:
+      data:
+        $ref: '#/definitions/http.TrackingSummary'
+      error:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: |-
+    Backend API for the WR any% automatic route tracking application.
+    WebSocket tracker: ws://host/v1/ws/tracker — see docs/contracts/websocket-tracker-protocol.md
+  title: WR any% API
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.HealthzEnv'
+      summary: Health check
+      tags:
+      - system
+  /v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.LoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TokenPairEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      summary: Login
+      tags:
+      - auth
+  /v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.RefreshReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TokenPairEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      summary: Refresh access token
+      tags:
+      - auth
+  /v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Registration credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.RegisterReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.TokenPairEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      summary: Register a new user
+      tags:
+      - auth
+  /v1/devices:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DevicesEnv'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: List current user's devices
+      tags:
+      - devices
+  /v1/devices/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Device registration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.RegisterDeviceReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.DeviceEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: Register a device
+      tags:
+      - devices
+  /v1/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.MeEnv'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - users
+  /v1/tracking/points:
+    get:
+      parameters:
+      - description: Filter by device UUID
+        in: query
+        name: device_id
+        type: string
+      - description: Start of time range (RFC3339)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End of time range (RFC3339)
+        in: query
+        name: to
+        required: true
+        type: string
+      - description: Max results per page (default 1000, max 5000)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor from previous response
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TrackingPointsEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: List raw GPS points for the authenticated user
+      tags:
+      - tracking
+  /v1/tracking/points/{event_id}:
+    delete:
+      parameters:
+      - description: Event UUID
+        in: path
+        name: event_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: Delete a single GPS point by event_id
+      tags:
+      - tracking
+  /v1/tracking/summary:
+    get:
+      parameters:
+      - description: Filter by device UUID
+        in: query
+        name: device_id
+        type: string
+      - description: Start of time range (RFC3339)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End of time range (RFC3339)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TrackingSummaryEnv'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ApiError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ApiError'
+      security:
+      - BearerAuth: []
+      summary: Get aggregated stats for a time range
+      tags:
+      - tracking
+securityDefinitions:
+  BearerAuth:
+    description: Bearer JWT access token. For WebSocket upgrade ?access_token=<jwt>
+      is also accepted.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

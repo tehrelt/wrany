@@ -2,7 +2,7 @@
         nats-check nats-streams nats-init \
         migrate-up migrate-down migrate-version \
         migrate-worker-up migrate-worker-down migrate-worker-version \
-        swagger-gen swagger-up
+        swagger-gen swagger-up ts-client web-up web-build
 
 up:
 	docker compose up -d --build
@@ -89,3 +89,21 @@ swagger-gen:
 swagger-up:
 	docker compose --profile tools up swagger-ui -d
 	@echo "Swagger UI: http://localhost:8088"
+
+# Start web dev server via Docker Compose (profile: web).
+web-up:
+	docker compose --profile web up web -d
+	@echo "Web dev server: http://localhost:3000"
+
+# Build web app for production (local, no Docker).
+web-build:
+	cd apps/web && npm run build
+
+# Generate TypeScript types for apps/web from the tracking-gateway OpenAPI spec.
+# Requires: make swagger-gen first to ensure spec is up to date.
+# Requires: npx (Node.js must be installed).
+ts-client:
+	mkdir -p apps/web/src/api/generated
+	npx --yes openapi-typescript services/tracking-gateway/docs/swagger.json \
+		-o apps/web/src/api/generated/schema.d.ts
+	@echo "Generated: apps/web/src/api/generated/schema.d.ts"
