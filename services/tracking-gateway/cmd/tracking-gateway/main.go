@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/wrany/tracking-gateway/internal/app"
+	_ "github.com/wrany/tracking-gateway/docs"
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/migrations"
 )

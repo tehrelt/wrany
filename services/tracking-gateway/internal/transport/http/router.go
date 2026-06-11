@@ -26,6 +26,7 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	trackerH := NewTrackerHandler(deps.Tracker, deps.Config)
 
 	mux.HandleFunc("/healthz", HealthzHandler)
+	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
 	mux.HandleFunc("POST /v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /v1/auth/refresh", authH.Refresh)

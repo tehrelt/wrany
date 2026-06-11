@@ -2,7 +2,7 @@
         nats-check nats-streams nats-init \
         migrate-up migrate-down migrate-version \
         migrate-worker-up migrate-worker-down migrate-worker-version \
-        openapi-generate openapi-merge openapi-check swagger-up
+        swagger-gen swagger-up
 
 up:
 	docker compose up -d --build
@@ -73,40 +73,19 @@ migrate-worker-version:
 
 # ── OpenAPI ──────────────────────────────────────────────────────────────────
 
-# Generate per-service OpenAPI specs from backend annotations.
+# Regenerate services/tracking-gateway/docs/ from Go annotations.
 # Requires swag CLI: go install github.com/swaggo/swag/cmd/swag@latest
-openapi-generate:
-	@mkdir -p docs/openapi/generated
-	cd services/tracking-gateway && swag init \
+# Run after changing handler annotations; commit the result.
+swagger-gen:
+	cd services/tracking-gateway && GOWORK=off swag init \
 		-g cmd/tracking-gateway/main.go \
-		--output ../../docs/openapi/generated \
-		--outputTypes json \
+		--outputTypes json,go \
 		--parseDependency \
 		--parseInternal
-	@mv docs/openapi/generated/swagger.json docs/openapi/generated/tracking-gateway.json
-	@echo "Generated: docs/openapi/generated/tracking-gateway.json"
+	@echo "Generated: services/tracking-gateway/docs/"
 
-# Merge per-service specs into combined.json.
-# Requires: docs/openapi/generated/ populated (run make openapi-generate first).
-openapi-merge:
-	@mkdir -p docs/openapi/generated
-	npx --yes openapi-merge-cli --config docs/openapi/merge/openapi-merge.json
-	@echo "Merged: docs/openapi/generated/combined.json"
-
-# Check that spec generation succeeds (used in CI).
-openapi-check:
-	@mkdir -p /tmp/swag-check
-	cd services/tracking-gateway && swag init \
-		-g cmd/tracking-gateway/main.go \
-		--output /tmp/swag-check \
-		--outputTypes json \
-		--parseDependency \
-		--parseInternal
-	@echo "openapi-check passed: tracking-gateway spec generates without errors"
-
-# Build and start Swagger UI container (separate profile — not included in make up).
-# The image embeds the OpenAPI spec generated from backend annotations at build time.
-# Re-run after changing handler annotations to pick up the new spec.
+# Start Swagger UI (no build — spec is served live by tracking-gateway).
+# Requires: make up (tracking-gateway must be running on :8080).
 swagger-up:
-	docker compose --profile tools up swagger-ui -d --build
+	docker compose --profile tools up swagger-ui -d
 	@echo "Swagger UI: http://localhost:8088"

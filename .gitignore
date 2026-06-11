@@ -31,7 +31,7 @@ android/app/build/
 *.apk
 *.aab
 
-# OpenAPI generated specs (always regenerated via make openapi-generate)
+# Old OpenAPI merge output — no longer used (spec served live by services)
 docs/openapi/generated/
 
 # React Native generated API client
