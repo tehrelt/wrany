@@ -392,7 +392,26 @@ Status: Done (committed with EPIC.md)
 
 ## Implementation Log
 
-_Updated after each meaningful change._
+### 2026-06-11 — Backend read API (T02–T07)
+
+- `internal/domain/tracking_point.go` — `TrackingPoint`, `TrackingPointFilter`, `TrackingSummary`
+- `internal/usecase/tracking_query.go` — `TrackingQueryRepo` interface, `TrackingQueryUsecase` с лимитом и валидацией диапазона (max 31 day)
+- `internal/storage/postgres/tracking_query_repo.go` — cursor pagination, mandatory `user_id` filter
+- `internal/transport/http/tracking_query_handler.go` — `GET /v1/tracking/points`, `GET /v1/tracking/summary`, swaggo annotations
+- `router.go`, `app.go` обновлены
+- Unit tests (usecase): 8 тестов — pass
+- Integration tests (repo): 5 тестов — pass
+- `make swagger-gen` — новые эндпоинты в swagger.json
+
+### 2026-06-11 — Web app scaffold (T08–T19)
+
+- `Makefile` — `ts-client`, `web-up`, `web-build`
+- `apps/web/` — React 18 + Vite 6 + TypeScript 5, все зависимости установлены
+- Auth feature, devices feature, tracking feature
+- MapView (react-leaflet + OSM), PointsTable, SummaryCards, состояния loading/error/empty
+- LoginPage, RegisterPage, DashboardPage
+- 5 unit тестов — pass; `npm run build` — success
+- `docker-compose.yml` — сервис `web` (profile: web, port 3000)
 
 ---
 

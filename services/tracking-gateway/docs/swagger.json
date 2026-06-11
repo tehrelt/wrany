@@ -284,6 +284,134 @@
                     }
                 }
             }
+        },
+        "/v1/tracking/points": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "List raw GPS points for the authenticated user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 1000, max 5000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swTrackingPointsEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swErr"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swErr"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tracking/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "Get aggregated stats for a time range",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swTrackingSummaryEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swErr"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.swErr"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -457,6 +585,106 @@
             "properties": {
                 "data": {
                     "$ref": "#/definitions/internal_transport_http.swTokenPair"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.swTrackingPoint": {
+            "type": "object",
+            "properties": {
+                "accuracy_m": {
+                    "type": "number",
+                    "example": 8.5
+                },
+                "activity_type": {
+                    "type": "string",
+                    "example": "walking"
+                },
+                "bearing_deg": {
+                    "type": "number"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number",
+                    "example": 55.751244
+                },
+                "lon": {
+                    "type": "number",
+                    "example": 37.618423
+                },
+                "recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                },
+                "speed_mps": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_transport_http.swTrackingPointsEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.swTrackingPointsResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.swTrackingPointsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.swTrackingPoint"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.swTrackingSummary": {
+            "type": "object",
+            "properties": {
+                "avg_speed_mps": {
+                    "type": "number"
+                },
+                "duration_sec": {
+                    "type": "integer",
+                    "example": 1800
+                },
+                "first_recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                },
+                "last_recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:30:01Z"
+                },
+                "max_speed_mps": {
+                    "type": "number"
+                },
+                "points_count": {
+                    "type": "integer",
+                    "example": 123
+                }
+            }
+        },
+        "internal_transport_http.swTrackingSummaryEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.swTrackingSummary"
                 },
                 "error": {
                     "type": "string"
