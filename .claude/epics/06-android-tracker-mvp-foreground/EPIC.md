@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Implemented
 
 ---
 
@@ -527,10 +527,62 @@ api/generated → config (base URL)
 
 ## Implementation Log
 
-_(empty — not started)_
+- T02: WSAuthMiddleware — `?access_token=` query param fallback for WS endpoint; 9 middleware tests; docs updated
+- T01: EPICS.md updated with EPIC 06 scope
+- T03: swag annotations on all tracking-gateway REST handlers; swagger_types.go with named request/response types; handlers refactored to use named types
+- T04: `make openapi-generate` — `swag init` → `docs/openapi/generated/tracking-gateway.json`
+- T05: `docs/openapi/merge/openapi-merge.json` + `make openapi-merge` → `combined.json`
+- T06: `make openapi-check` — validates spec generation in CI
+- T07/T08: `swagger-ui` Docker service with multi-stage build (spec generated at image build time, no manual updates); `make swagger-up --build`
+- T09: `npm run generate:api` script in `apps/android-tracker/package.json` using `openapi-typescript-codegen`
+- T10: React Native CLI 0.86.0 project initialized in `apps/android-tracker`; dependencies installed
+- T11: `src/config/env.ts` — API_BASE_URL, WS_URL with 10.0.2.2 for emulator
+- T12: `src/storage/tokenStorage.ts` — AsyncStorage-backed token save/get/clear
+- T13: `src/tracker/deviceId.ts` — UUID v4 generation + AsyncStorage persistence with in-process cache
+- T14: `src/tracker/types.ts` — full WS protocol TypeScript types
+- T15: `src/tracker/batchQueue.ts` — in-memory queue, flush on size/interval/stop, ack-based removal
+- T16: `src/tracker/trackerSocket.ts` — WS lifecycle, session.start, location.batch, ack handling
+- T17: `src/tracker/locationService.ts` — Android permission request, foreground GPS watcher, synthetic event
+- T18: `src/api/httpClient.ts` — fetch wrapper with envelope unpacking
+- T18: `src/api/authApi.ts`, `src/api/deviceApi.ts` — REST API wrappers
+- T19: `src/screens/AuthScreen.tsx` — register/login UI
+- T20: `src/screens/TrackerScreen.tsx` — full debug UI with all counters and buttons
+- T21: 6 unit tests passing (batchQueue × 5, deviceId × 1)
+- T22: `apps/android-tracker/README.md` — full setup + E2E test guide
 
 ---
 
 ## Final Report
 
-_(empty — not started)_
+### What was built
+
+Full OpenAPI generation pipeline + minimal React Native Android tracker MVP.
+
+**Backend additions (tracking-gateway):**
+- `WSAuthMiddleware` with `?access_token=` query param fallback (React Native can't set WS upgrade headers)
+- swaggo/swag annotations on all REST endpoints
+- Multi-stage `Dockerfile.swagger`: `golang → node (merge) → swaggerapi/swagger-ui`; spec generated at image build time, never manually maintained
+- `make openapi-generate / openapi-merge / openapi-check / swagger-up`
+
+**Android app (`apps/android-tracker`):**
+- React Native CLI 0.86.0, TypeScript, Android only
+- State-based navigation (no react-navigation dep), 2 screens
+- Full WS protocol implementation matching EPIC 4 spec
+- In-memory batch queue: flush on size ≥ 50 or 10s interval
+- Foreground GPS via `react-native-geolocation-service`
+- `Send Test Point` for testing without movement
+
+### Key decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| `?access_token=` query param | RN Android WebSocket no custom headers on upgrade |
+| Multi-stage Docker for swagger | Spec auto-generated at build, no manual sync |
+| `openapi-merge-cli` | Explicit path conflict detection, config-driven for future services |
+| State-based navigation | No native dep, simplest for 2-screen MVP |
+| `Math.random()` UUID | No `react-native-get-random-values` dep for device ID |
+| In-memory queue only | SQLite offline queue out of scope (future EPIC) |
+
+### Out of scope (as designed)
+
+Background tracking, foreground service, SQLite queue, activity recognition, map UI, secure token storage, auto-reconnect.
