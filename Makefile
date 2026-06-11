@@ -1,6 +1,7 @@
 .PHONY: up down logs reset check-postgis db-shell test \
         nats-check nats-streams nats-init \
-        migrate-up migrate-down migrate-version
+        migrate-up migrate-down migrate-version \
+        migrate-worker-up migrate-worker-down migrate-worker-version
 
 up:
 	docker compose up -d --build
@@ -54,3 +55,17 @@ migrate-down:
 
 migrate-version:
 	migrate -path $(MIGRATIONS_DIR) -database "$(DATABASE_URL)" version
+
+# Migrations (tracking-worker)
+# Owns raw_location_points and future worker-specific tables.
+# Uses a separate migration path — does NOT overlap with tracking-gateway migrations.
+WORKER_MIGRATIONS_DIR := services/tracking-worker/infra/migrations
+
+migrate-worker-up:
+	migrate -path $(WORKER_MIGRATIONS_DIR) -database "$(DATABASE_URL)" up
+
+migrate-worker-down:
+	migrate -path $(WORKER_MIGRATIONS_DIR) -database "$(DATABASE_URL)" down 1
+
+migrate-worker-version:
+	migrate -path $(WORKER_MIGRATIONS_DIR) -database "$(DATABASE_URL)" version
