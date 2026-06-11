@@ -8,12 +8,13 @@ import (
 )
 
 type RouterDeps struct {
-	Auth      *usecase.AuthUsecase
-	Device    *usecase.DeviceUsecase
-	Me        *usecase.MeUsecase
-	Tracker   *usecase.TrackerIngestionUseCase
-	JWTSecret []byte
-	Config    config.Config
+	Auth           *usecase.AuthUsecase
+	Device         *usecase.DeviceUsecase
+	Me             *usecase.MeUsecase
+	Tracker        *usecase.TrackerIngestionUseCase
+	TrackingQuery  *usecase.TrackingQueryUsecase
+	JWTSecret      []byte
+	Config         config.Config
 }
 
 func NewRouter(deps RouterDeps) *http.ServeMux {
@@ -24,6 +25,7 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	deviceH := NewDeviceHandler(deps.Device)
 	meH := NewMeHandler(deps.Me)
 	trackerH := NewTrackerHandler(deps.Tracker, deps.Config)
+	trackingQueryH := NewTrackingQueryHandler(deps.TrackingQuery)
 
 	mux.HandleFunc("/healthz", HealthzHandler)
 	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
@@ -33,6 +35,8 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	mux.Handle("POST /v1/devices/register", auth(http.HandlerFunc(deviceH.RegisterDevice)))
 	mux.Handle("GET /v1/devices", auth(http.HandlerFunc(deviceH.ListDevices)))
 	mux.Handle("GET /v1/me", auth(http.HandlerFunc(meH.GetMe)))
+	mux.Handle("GET /v1/tracking/points", auth(http.HandlerFunc(trackingQueryH.GetPoints)))
+	mux.Handle("GET /v1/tracking/summary", auth(http.HandlerFunc(trackingQueryH.GetSummary)))
 	wsAuth := WSAuthMiddleware(deps.JWTSecret)
 	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 

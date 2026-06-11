@@ -12,6 +12,8 @@ var (
 	_ = swDevicesEnv{}
 	_ = swMeEnv{}
 	_ = swHealthzEnv{}
+	_ = swTrackingPointsEnv{}
+	_ = swTrackingSummaryEnv{}
 )
 
 // swRegisterReq is the body for POST /v1/auth/register.
@@ -97,4 +99,43 @@ type swMeEnv struct {
 type swHealthzEnv struct {
 	Data  swHealthz `json:"data"`
 	Error *string   `json:"error"`
+}
+
+// swTrackingPoint is a single raw GPS point in the points list response.
+type swTrackingPoint struct {
+	EventID      string   `json:"event_id"`
+	DeviceID     string   `json:"device_id"`
+	RecordedAt   string   `json:"recorded_at"   example:"2026-06-10T12:00:01Z"`
+	Lat          float64  `json:"lat"           example:"55.751244"`
+	Lon          float64  `json:"lon"           example:"37.618423"`
+	AccuracyM    float64  `json:"accuracy_m"    example:"8.5"`
+	SpeedMps     *float64 `json:"speed_mps"`
+	BearingDeg   *float64 `json:"bearing_deg"`
+	ActivityType string   `json:"activity_type" example:"walking"`
+}
+
+// swTrackingPointsResponse is the data payload for GET /v1/tracking/points.
+type swTrackingPointsResponse struct {
+	Items      []swTrackingPoint `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+// swTrackingSummary is the data payload for GET /v1/tracking/summary.
+type swTrackingSummary struct {
+	PointsCount     int      `json:"points_count"      example:"123"`
+	FirstRecordedAt *string  `json:"first_recorded_at" example:"2026-06-10T12:00:01Z"`
+	LastRecordedAt  *string  `json:"last_recorded_at"  example:"2026-06-10T12:30:01Z"`
+	DurationSec     int64    `json:"duration_sec"      example:"1800"`
+	AvgSpeedMps     *float64 `json:"avg_speed_mps"`
+	MaxSpeedMps     *float64 `json:"max_speed_mps"`
+}
+
+type swTrackingPointsEnv struct {
+	Data  swTrackingPointsResponse `json:"data"`
+	Error *string                  `json:"error"`
+}
+
+type swTrackingSummaryEnv struct {
+	Data  swTrackingSummary `json:"data"`
+	Error *string           `json:"error"`
 }
