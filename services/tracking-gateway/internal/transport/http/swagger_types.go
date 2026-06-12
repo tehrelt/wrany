@@ -133,6 +133,32 @@ type TrackingSummaryEnv struct {
 	Error *string         `json:"error"`
 }
 
+// TrackSegmentItem is one element of a simplified track from GET /v1/tracking/track.
+// kind="move": a single GPS point; kind="stay": a centroid of a stationary cluster.
+type TrackSegmentItem struct {
+	Kind            string   `json:"kind"              example:"stay"`
+	EventID         string   `json:"event_id"`
+	RecordedAt      string   `json:"recorded_at"       example:"2026-06-10T12:00:01Z"`
+	PeriodEnd       string   `json:"period_end"        example:"2026-06-10T14:30:00Z"`
+	Lat             float64  `json:"lat"               example:"55.751244"`
+	Lon             float64  `json:"lon"               example:"37.618423"`
+	SpeedMps        *float64 `json:"speed_mps"`
+	AccuracyM       *float64 `json:"accuracy_m"`
+	StayDurationSec int      `json:"stay_duration_sec" example:"9000"`
+	MergedCount     int      `json:"merged_count"      example:"180"`
+}
+
+// TrackResponse is the data payload for GET /v1/tracking/track.
+type TrackResponse struct {
+	Items []TrackSegmentItem `json:"items"`
+}
+
+// TrackEnv is the envelope for GET /v1/tracking/track.
+type TrackEnv struct {
+	Data  TrackResponse `json:"data"`
+	Error *string       `json:"error"`
+}
+
 // TripItem is a single trip in list/detail responses.
 type TripItem struct {
 	ID          string   `json:"id"`

@@ -11,6 +11,7 @@ import (
 	"github.com/wrany/libs/eventbus"
 	natseventbus "github.com/wrany/libs/eventbus/nats"
 	"github.com/wrany/tracking-gateway/internal/config"
+	"github.com/wrany/tracking-gateway/internal/observ"
 	"github.com/wrany/tracking-gateway/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-gateway/internal/transport/http"
 	"github.com/wrany/tracking-gateway/internal/usecase"
@@ -71,7 +72,9 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		cfg.WSMaxBatchSize,
 	)
 
-	router := httptransport.NewRouter(httptransport.RouterDeps{
+	metrics := observ.NewGatewayMetrics()
+
+	handler := httptransport.NewRouter(httptransport.RouterDeps{
 		Auth:          authUC,
 		Device:        deviceUC,
 		Me:            meUC,
@@ -82,12 +85,13 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		RouteResults:  routeResultQueryUC,
 		JWTSecret:     []byte(cfg.JWTSecret),
 		Config:        cfg,
+		Metrics:       metrics,
 	})
 
 	return &App{
 		srv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: httptransport.LoggingMiddleware(httptransport.CORSMiddleware(router)),
+			Handler: handler,
 		},
 		natsBus: natsBus,
 	}

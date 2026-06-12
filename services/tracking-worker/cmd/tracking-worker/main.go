@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -12,9 +13,12 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})).With("service", "tracking-worker"))
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config", "err", err)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -22,16 +26,18 @@ func main() {
 
 	a, err := app.New(ctx, cfg)
 	if err != nil {
-		log.Fatalf("init: %v", err)
+		slog.Error("init", "err", err)
+		os.Exit(1)
 	}
 
 	if err := a.Run(ctx); err != nil {
-		log.Printf("run: %v", err)
+		slog.Error("run", "err", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := a.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("shutdown: %v", err)
+		slog.Error("shutdown", "err", err)
+		os.Exit(1)
 	}
 }

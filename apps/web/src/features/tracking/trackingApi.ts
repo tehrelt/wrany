@@ -1,4 +1,5 @@
 import { getTracking } from '@/api/generated/tracking/tracking'
+import { apiClient } from '@/api/client'
 
 export interface TrackingPoint {
   event_id: string
@@ -62,4 +63,38 @@ export async function getSummary(filter: Omit<PointsFilter, 'limit' | 'cursor'>)
 
 export async function deletePoint(eventId: string): Promise<void> {
   await api.deleteV1TrackingPointsEventId(eventId)
+}
+
+export interface TrackSegment {
+  kind: 'move' | 'stay'
+  event_id: string
+  recorded_at: string
+  period_end: string
+  lat: number
+  lon: number
+  speed_mps: number | null
+  accuracy_m: number | null
+  stay_duration_sec: number
+  merged_count: number
+}
+
+export interface TrackFilter {
+  device_id?: string
+  from: string
+  to: string
+  speed_threshold_mps?: number
+  min_stay_sec?: number
+  min_move_sec?: number
+}
+
+export async function getTrack(filter: TrackFilter): Promise<TrackSegment[]> {
+  const params = new URLSearchParams({ from: filter.from, to: filter.to })
+  if (filter.device_id) params.set('device_id', filter.device_id)
+  if (filter.speed_threshold_mps != null) params.set('speed_threshold_mps', String(filter.speed_threshold_mps))
+  if (filter.min_stay_sec != null) params.set('min_stay_sec', String(filter.min_stay_sec))
+  if (filter.min_move_sec != null) params.set('min_move_sec', String(filter.min_move_sec))
+  const res = await apiClient.get<{ data: { items: TrackSegment[] }; error: string | null }>(
+    `/v1/tracking/track?${params}`,
+  )
+  return res.data.data.items ?? []
 }

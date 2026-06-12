@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/env';
+import { getApiUrl } from '../storage/settingsStorage';
 import {
   clearTokens,
   getAccessToken,
@@ -28,7 +28,8 @@ async function doRefresh(): Promise<string> {
   const rt = await getRefreshToken();
   if (!rt) throw new AuthExpiredError();
 
-  const res = await fetch(`${API_BASE_URL}/v1/auth/refresh`, {
+  const base = await getApiUrl();
+  const res = await fetch(`${base}/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: rt }),
@@ -102,7 +103,7 @@ export async function apiFetch<T>(
   };
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${await getApiUrl()}${path}`;
   console.log(`[HTTP] ${options.method ?? 'GET'} ${url}`);
 
   const res = await fetch(url, { ...options, headers });

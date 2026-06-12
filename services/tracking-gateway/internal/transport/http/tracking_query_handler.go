@@ -190,6 +190,74 @@ func (h *TrackingQueryHandler) DeletePoint(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetTrack godoc
+// @Summary      Get simplified track: stationary clusters collapsed to a centroid
+// @Tags         tracking
+// @Produce      json
+// @Param        device_id  query     string  false  "Filter by device UUID"
+// @Param        from       query     string  true   "Start of time range (RFC3339)"
+// @Param        to         query     string  true   "End of time range (RFC3339)"
+// @Success      200        {object}  TrackEnv
+// @Failure      400        {object}  ApiError
+// @Failure      401        {object}  ApiError
+// @Security     BearerAuth
+// @Router       /v1/tracking/track [get]
+func (h *TrackingQueryHandler) GetTrack(w http.ResponseWriter, r *http.Request) {
+	userID, ok := UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	q := r.URL.Query()
+
+	from, to, err := parseDateRange(q.Get("from"), q.Get("to"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	speedThreshold, _ := strconv.ParseFloat(q.Get("speed_threshold_mps"), 64)
+	minStaySec, _ := strconv.Atoi(q.Get("min_stay_sec"))
+	minMoveSec, _ := strconv.Atoi(q.Get("min_move_sec"))
+
+	segments, err := h.uc.GetTrack(r.Context(), usecase.GetTrackInput{
+		UserID:            userID.String(),
+		DeviceID:          q.Get("device_id"),
+		From:              from,
+		To:                to,
+		SpeedThresholdMps: speedThreshold,
+		MinStaySec:        minStaySec,
+		MinMoveSec:        minMoveSec,
+	})
+	if err != nil {
+		if isValidationError(err) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]TrackSegmentItem, 0, len(segments))
+	for _, s := range segments {
+		items = append(items, TrackSegmentItem{
+			Kind:            string(s.Kind),
+			EventID:         s.EventID,
+			RecordedAt:      s.RecordedAt.UTC().Format(time.RFC3339),
+			PeriodEnd:       s.PeriodEnd.UTC().Format(time.RFC3339),
+			Lat:             s.Lat,
+			Lon:             s.Lon,
+			SpeedMps:        s.SpeedMps,
+			AccuracyM:       s.AccuracyM,
+			StayDurationSec: s.StayDurationSec,
+			MergedCount:     s.MergedCount,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, TrackResponse{Items: items})
+}
+
 func parseDateRange(fromStr, toStr string) (time.Time, time.Time, error) {
 	if fromStr == "" {
 		return time.Time{}, time.Time{}, usecase.ErrFromRequired

@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { TrackingMap } from '@/components/map/TrackingMap'
 import { SummaryCards } from '@/components/tracking/SummaryCards'
 import { PointsTable } from '@/components/tracking/PointsTable'
-import { TrackingFilters, defaultFrom, defaultTo } from '@/features/tracking/TrackingFilters'
+import { TrackingFilters, defaultFrom, defaultTo, defaultTrackSettings, type TrackDisplaySettings } from '@/features/tracking/TrackingFilters'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { getPoints, getSummary, deletePoint, type PointsResponse, type TrackingSummary } from '@/features/tracking/trackingApi'
+import { getPoints, getSummary, deletePoint, getTrack, type PointsResponse, type TrackingSummary, type TrackSegment } from '@/features/tracking/trackingApi'
 import { useAuth } from '@/features/auth/useAuth'
 
 interface Props {
@@ -20,12 +20,25 @@ export function DashboardPage({ onLogout }: Props) {
   const [to, setTo] = useState(defaultTo)
   const [rev, setRev] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [trackSettings, setTrackSettings] = useState<TrackDisplaySettings>(defaultTrackSettings)
 
   const filter = {
     device_id: deviceId || undefined,
     from,
     to,
   }
+
+  const trackQuery = useQuery<TrackSegment[]>({
+    queryKey: ['track', filter, trackSettings, rev],
+    queryFn: () => getTrack({
+      ...filter,
+      speed_threshold_mps: trackSettings.speedThresholdMps,
+      min_stay_sec: trackSettings.minStaySec,
+      min_move_sec: trackSettings.minMoveSec,
+    }),
+    enabled: !!filter.from && !!filter.to,
+    placeholderData: keepPreviousData,
+  })
 
   const pointsQuery = useQuery<PointsResponse>({
     queryKey: ['points', filter, rev],
@@ -46,8 +59,9 @@ export function DashboardPage({ onLogout }: Props) {
     refresh()
   }, [refresh])
 
+  const segments = trackQuery.data ?? []
   const points = pointsQuery.data?.items ?? []
-  const isLoading = pointsQuery.isLoading || summaryQuery.isLoading
+  const isLoading = trackQuery.isLoading || summaryQuery.isLoading
 
   let userEmail = ''
   if (token) {
@@ -68,14 +82,16 @@ export function DashboardPage({ onLogout }: Props) {
           from={from}
           to={to}
           loading={isLoading}
+          settings={trackSettings}
           onDeviceChange={setDeviceId}
           onFromChange={setFrom}
           onToChange={setTo}
+          onSettingsChange={setTrackSettings}
           onRefresh={refresh}
         />
       }
     >
-      {(pointsQuery.isError || summaryQuery.isError) && (
+      {(trackQuery.isError || pointsQuery.isError || summaryQuery.isError) && (
         <Alert variant="destructive" className="m-4">
           <AlertDescription>Failed to load tracking data. Check filters or try again.</AlertDescription>
         </Alert>
@@ -85,8 +101,9 @@ export function DashboardPage({ onLogout }: Props) {
 
       <div className="flex-1 min-h-0">
         <TrackingMap
-          points={points}
-          loading={pointsQuery.isLoading}
+          segments={segments}
+          fitKey={`${filter.device_id ?? ''}|${filter.from}|${filter.to}`}
+          loading={trackQuery.isLoading}
           selectedId={selectedId}
           onSelect={setSelectedId}
         />

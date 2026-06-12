@@ -20,10 +20,11 @@ HTTP API gateway for the WR any% tracking system.
 | `POST` | `/v1/devices/register` | Bearer JWT | Register or update a device |
 | `GET`  | `/v1/devices` | Bearer JWT | List current user's devices |
 
-### Health
+### Health & Metrics
 
 ```
 GET /healthz
+GET /metrics    Prometheus metrics
 ```
 
 ## Auth Flow
@@ -54,6 +55,43 @@ curl -X POST http://localhost:8080/v1/devices/register \
   -H "Content-Type: application/json" \
   -d '{"device_id":"550e8400-e29b-41d4-a716-446655440000","name":"Pixel 7","platform":"android"}'
 ```
+
+## Observability
+
+### Prometheus Metrics
+
+`GET /metrics` — exposed on the same port as the API.
+
+Key metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `ws_connections_active` | Gauge | Active WebSocket connections |
+| `ws_connections_total` | Counter | Total WS connections accepted |
+| `location_batches_received_total` | Counter | Location batches received |
+| `location_points_received_total` | Counter | Location points received |
+| `nats_publish_total` | Counter | NATS publish attempts |
+| `nats_publish_errors_total` | Counter | NATS publish errors |
+| `http_requests_total` | Counter | HTTP requests by method/endpoint/status |
+| `http_request_duration_seconds` | Histogram | HTTP request latency |
+| `http_requests_in_flight` | Gauge | Concurrent HTTP requests |
+| `db_query_duration_seconds` | Histogram | DB query latency |
+| `auth_requests_total` | Counter | Auth attempts by result |
+
+### Structured Logs
+
+All logs are JSON (`slog`). Common fields:
+
+```json
+{"time":"...","level":"INFO","service":"tracking-gateway","request_id":"uuid","msg":"..."}
+```
+
+WebSocket logs also include `session_id`, `user_id`, `device_id`, `remote_addr`.
+
+### Correlation IDs
+
+- HTTP: `X-Request-Id` header — preserved if present, generated if absent. Echoed in response.
+- WebSocket: `session_id` (UUID) generated per connection, present in all WS log lines.
 
 ## Environment Variables
 

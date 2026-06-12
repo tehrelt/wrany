@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	eventbusnats "github.com/wrany/libs/eventbus/nats"
 	"github.com/wrany/tracking-worker/internal/config"
 	"github.com/wrany/tracking-worker/internal/domain"
+	"github.com/wrany/tracking-worker/internal/observ"
 	"github.com/wrany/tracking-worker/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-worker/internal/transport/http"
 	natstransport "github.com/wrany/tracking-worker/internal/transport/nats"
@@ -28,6 +29,7 @@ type App struct {
 	routeMatchingIvl   time.Duration
 	bus                *eventbusnats.Bus
 	db                 *pgxpool.Pool
+	metrics            *observ.WorkerMetrics
 }
 
 // New builds the App from config: connects to Postgres and NATS,
@@ -55,7 +57,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		db.Close()
 		return nil, fmt.Errorf("app: ensure stream: %w", err)
 	}
-	log.Printf("nats: connected to %s stream=%s", cfg.NatsURL, cfg.NatsStream)
+	slog.Info("nats: connected", "url", cfg.NatsURL, "stream", cfg.NatsStream)
 
 	// Durable pull consumer for location.events.v1.
 	consumerCfg := eventbusnats.ConsumerConfig{
@@ -90,10 +92,12 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	routeRepo := postgres.NewRouteRepo(db)
 	routeJob := usecase.NewRouteMatchingJob(routeRepo, bus, "tracking-worker", domain.DefaultRouteMatchConfig())
 
+	metrics := observ.NewWorkerMetrics()
+
 	return &App{
 		httpSrv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: httptransport.NewRouter(),
+			Handler: httptransport.NewRouter(metrics),
 		},
 		locationConsumer: locationConsumer,
 		tripDetectionJob: tripJob,
@@ -102,6 +106,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		routeMatchingIvl: time.Duration(cfg.RouteMatchingIntervalSec) * time.Second,
 		bus:              bus,
 		db:               db,
+		metrics:          metrics,
 	}, nil
 }
 
@@ -109,9 +114,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 // Blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	go func() {
-		log.Printf("tracking-worker: HTTP health server on %s", a.httpSrv.Addr)
+		slog.Info("tracking-worker: HTTP health server", "addr", a.httpSrv.Addr)
 		if err := a.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("tracking-worker: HTTP server error: %v", err)
+			slog.Error("tracking-worker: HTTP server error", "err", err)
 		}
 	}()
 
@@ -124,7 +129,7 @@ func (a *App) Run(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				if err := a.tripDetectionJob.RunOnce(ctx); err != nil {
-					log.Printf("trip_detection_job: %v", err)
+					slog.Error("trip_detection_job: run error", "err", err)
 				}
 			}
 		}
@@ -139,13 +144,13 @@ func (a *App) Run(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				if err := a.routeMatchingJob.RunOnce(ctx); err != nil {
-					log.Printf("route_matching_job: %v", err)
+					slog.Error("route_matching_job: run error", "err", err)
 				}
 			}
 		}
 	}()
 
-	log.Printf("tracking-worker: starting location consumer")
+	slog.Info("tracking-worker: starting location consumer")
 	if err := a.locationConsumer.Run(ctx); err != nil {
 		return fmt.Errorf("location consumer: %w", err)
 	}
@@ -154,15 +159,15 @@ func (a *App) Run(ctx context.Context) error {
 
 // Shutdown drains in-flight work and closes all connections.
 func (a *App) Shutdown(ctx context.Context) error {
-	log.Println("tracking-worker: shutting down")
+	slog.Info("tracking-worker: shutting down")
 	if err := a.httpSrv.Shutdown(ctx); err != nil {
-		log.Printf("tracking-worker: HTTP shutdown error: %v", err)
+		slog.Error("tracking-worker: HTTP shutdown error", "err", err)
 	}
 	if err := a.locationConsumer.Close(); err != nil {
-		log.Printf("tracking-worker: consumer close error: %v", err)
+		slog.Error("tracking-worker: consumer close error", "err", err)
 	}
 	if err := a.bus.Close(); err != nil {
-		log.Printf("tracking-worker: nats close error: %v", err)
+		slog.Error("tracking-worker: nats close error", "err", err)
 	}
 	a.db.Close()
 	return nil

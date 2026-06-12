@@ -19,6 +19,7 @@ type TrackingQueryRepo interface {
 	GetPoints(ctx context.Context, filter domain.TrackingPointFilter) ([]domain.TrackingPoint, string, error)
 	GetSummary(ctx context.Context, filter domain.TrackingPointFilter) (domain.TrackingSummary, error)
 	DeletePoint(ctx context.Context, userID, eventID string) error
+	GetTrack(ctx context.Context, filter domain.TrackFilter) ([]domain.TrackSegment, error)
 }
 
 // TrackingQueryUsecase handles read queries for raw location points.
@@ -101,6 +102,50 @@ type DeletePointInput struct {
 
 func (u *TrackingQueryUsecase) DeletePoint(ctx context.Context, in DeletePointInput) error {
 	return u.repo.DeletePoint(ctx, in.UserID, in.EventID)
+}
+
+const (
+	defaultSpeedThresholdMps = 2.0
+	defaultMinStaySec        = 60
+	defaultMinMoveSec        = 30
+)
+
+// GetTrackInput is the caller-supplied filter for the simplified track query.
+type GetTrackInput struct {
+	UserID            string
+	DeviceID          string
+	From              time.Time
+	To                time.Time
+	SpeedThresholdMps float64 // 0 → use default
+	MinStaySec        int     // 0 → use default
+	MinMoveSec        int     // 0 → use default
+}
+
+func (u *TrackingQueryUsecase) GetTrack(ctx context.Context, in GetTrackInput) ([]domain.TrackSegment, error) {
+	if err := validateRange(in.From, in.To); err != nil {
+		return nil, err
+	}
+	threshold := in.SpeedThresholdMps
+	if threshold <= 0 {
+		threshold = defaultSpeedThresholdMps
+	}
+	minStay := in.MinStaySec
+	if minStay <= 0 {
+		minStay = defaultMinStaySec
+	}
+	minMove := in.MinMoveSec
+	if minMove <= 0 {
+		minMove = defaultMinMoveSec
+	}
+	return u.repo.GetTrack(ctx, domain.TrackFilter{
+		UserID:            in.UserID,
+		DeviceID:          in.DeviceID,
+		From:              in.From,
+		To:                in.To,
+		SpeedThresholdMps: threshold,
+		MinStaySec:        minStay,
+		MinMoveSec:        minMove,
+	})
 }
 
 func validateRange(from, to time.Time) error {

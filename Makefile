@@ -2,7 +2,9 @@
         nats-check nats-streams nats-init \
         migrate-up migrate-down migrate-version \
         migrate-worker-up migrate-worker-down migrate-worker-version \
-        swagger-gen swagger-up ts-client web-up web-build
+        swagger-gen swagger-up ts-client web-up web-build \
+        observability-up observability-down observability-logs \
+        prometheus-check grafana-check loki-check
 
 up:
 	docker compose up -d --build
@@ -89,6 +91,33 @@ swagger-gen:
 swagger-up:
 	docker compose --profile tools up swagger-ui -d
 	@echo "Swagger UI: http://localhost:8088"
+
+# ── Observability ─────────────────────────────────────────────────────────────
+
+# Start Prometheus, Grafana, Loki, Promtail, postgres-exporter, nats-exporter.
+# Requires: make up (core services must be running).
+observability-up:
+	docker compose --profile observability up -d
+	@echo "Prometheus: http://localhost:9090"
+	@echo "Grafana:    http://localhost:3001 (admin / $$GRAFANA_PASSWORD)"
+	@echo "Loki:       http://localhost:3100"
+
+observability-down:
+	docker compose --profile observability down
+
+observability-logs:
+	docker compose --profile observability logs -f
+
+prometheus-check:
+	curl -sf http://localhost:9090/-/ready && echo "Prometheus OK" || echo "Prometheus NOT READY"
+
+grafana-check:
+	curl -sf http://localhost:3001/api/health && echo "Grafana OK" || echo "Grafana NOT READY"
+
+loki-check:
+	curl -sf http://localhost:3100/ready && echo "Loki OK" || echo "Loki NOT READY"
+
+# ── Web ───────────────────────────────────────────────────────────────────────
 
 # Start web dev server via Docker Compose (profile: web).
 web-up:
