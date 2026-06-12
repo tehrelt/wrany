@@ -1,0 +1,109 @@
+{
+  "title": "WebSocket Ingestion",
+  "uid": "wrany-ws-ingestion",
+  "tags": ["wrany"],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active WS Connections",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "gateway_ws_connections_active",
+          "legendFormat": "active"
+        }
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"}
+    },
+    {
+      "id": 2,
+      "title": "Sessions Accepted / Rejected",
+      "type": "timeseries",
+      "gridPos": {"x": 4, "y": 0, "w": 10, "h": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_ws_sessions_accepted_total[1m])",
+          "legendFormat": "accepted"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_ws_sessions_rejected_total[1m])",
+          "legendFormat": "rejected"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "WS Connections Total Rate",
+      "type": "timeseries",
+      "gridPos": {"x": 14, "y": 0, "w": 10, "h": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_ws_connections_total[1m])",
+          "legendFormat": "connections/s"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Location Batches Received / Acked / Rejected",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_location_batches_received_total[1m])",
+          "legendFormat": "received"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_location_batches_acked_total[1m])",
+          "legendFormat": "acked"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_location_batches_rejected_total[1m])",
+          "legendFormat": "rejected"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Location Points Received",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_location_points_received_total[1m])",
+          "legendFormat": "points/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "NATS Publish Errors",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "rate(gateway_nats_publish_errors_total[1m])",
+          "legendFormat": "{{subject}} {{error_type}}"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "hide": 0}
+    ]
+  }
+}

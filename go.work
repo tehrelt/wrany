@@ -3,6 +3,7 @@ go 1.25.0
 use (
 	./libs/events
 	./libs/eventbus
+	./libs/observability
 	./services/tracking-gateway
 	./services/tracking-worker
 )

@@ -27,7 +27,7 @@ import (
 // @name                        Authorization
 // @description                 Bearer JWT access token. For WebSocket upgrade ?access_token=<jwt> is also accepted.
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})).With("service", "tracking-gateway"))
 
 	cfg := config.Load()
 
