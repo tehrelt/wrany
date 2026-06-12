@@ -24,6 +24,8 @@ type App struct {
 	locationConsumer   *natstransport.LocationConsumer
 	tripDetectionJob   *usecase.TripDetectionJob
 	tripDetectionIvl   time.Duration
+	routeMatchingJob   *usecase.RouteMatchingJob
+	routeMatchingIvl   time.Duration
 	bus                *eventbusnats.Bus
 	db                 *pgxpool.Pool
 }
@@ -85,6 +87,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	tripRepo := postgres.NewTripRepo(db)
 	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", domain.DefaultTripDetectionConfig())
 
+	routeRepo := postgres.NewRouteRepo(db)
+	routeJob := usecase.NewRouteMatchingJob(routeRepo, bus, "tracking-worker", domain.DefaultRouteMatchConfig())
+
 	return &App{
 		httpSrv: &http.Server{
 			Addr:    ":" + cfg.Port,
@@ -93,6 +98,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		locationConsumer: locationConsumer,
 		tripDetectionJob: tripJob,
 		tripDetectionIvl: time.Duration(cfg.TripDetectionIntervalSec) * time.Second,
+		routeMatchingJob: routeJob,
+		routeMatchingIvl: time.Duration(cfg.RouteMatchingIntervalSec) * time.Second,
 		bus:              bus,
 		db:               db,
 	}, nil
@@ -118,6 +125,21 @@ func (a *App) Run(ctx context.Context) error {
 			case <-ticker.C:
 				if err := a.tripDetectionJob.RunOnce(ctx); err != nil {
 					log.Printf("trip_detection_job: %v", err)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(a.routeMatchingIvl)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := a.routeMatchingJob.RunOnce(ctx); err != nil {
+					log.Printf("route_matching_job: %v", err)
 				}
 			}
 		}

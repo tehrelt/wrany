@@ -103,7 +103,6 @@ web-build:
 # Requires: make swagger-gen first to ensure spec is up to date.
 # Requires: npx (Node.js must be installed).
 ts-client:
-	mkdir -p apps/web/src/api/generated
-	npx --yes openapi-typescript services/tracking-gateway/docs/swagger.json \
-		-o apps/web/src/api/generated/schema.d.ts
+	cd apps/web && ORVAL_INPUT=../../services/tracking-gateway/docs/swagger.json \
+		npx orval --config orval.config.local.ts
 	@echo "Generated: apps/web/src/api/generated/schema.d.ts"

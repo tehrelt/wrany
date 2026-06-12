@@ -28,7 +28,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.HealthzEnv"
+                            "$ref": "#/definitions/internal_transport_http.HealthzEnv"
                         }
                     }
                 }
@@ -53,7 +53,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.LoginReq"
+                            "$ref": "#/definitions/internal_transport_http.LoginReq"
                         }
                     }
                 ],
@@ -61,19 +61,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenPairEnv"
+                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -98,7 +98,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.RefreshReq"
+                            "$ref": "#/definitions/internal_transport_http.RefreshReq"
                         }
                     }
                 ],
@@ -106,19 +106,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenPairEnv"
+                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -143,7 +143,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.RegisterReq"
+                            "$ref": "#/definitions/internal_transport_http.RegisterReq"
                         }
                     }
                 ],
@@ -151,25 +151,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenPairEnv"
+                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -193,13 +193,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.DevicesEnv"
+                            "$ref": "#/definitions/internal_transport_http.DevicesEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -229,7 +229,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.RegisterDeviceReq"
+                            "$ref": "#/definitions/internal_transport_http.RegisterDeviceReq"
                         }
                     }
                 ],
@@ -237,25 +237,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.DeviceEnv"
+                            "$ref": "#/definitions/internal_transport_http.DeviceEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -279,13 +279,216 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.MeEnv"
+                            "$ref": "#/definitions/internal_transport_http.MeEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/routes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "routes"
+                ],
+                "summary": "List routes for the authenticated user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 50, max 200)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.RouteListEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/routes/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Get a single route by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Route UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.RouteEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/routes/{id}/points": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Get template polyline points of a route",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Route UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.RoutePointsEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/routes/{id}/trips": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "routes"
+                ],
+                "summary": "List trips attached to a route",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Route UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 50, max 200)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.RouteTripListEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -343,19 +546,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TrackingPointsEnv"
+                            "$ref": "#/definitions/internal_transport_http.TrackingPointsEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -388,13 +591,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -440,19 +643,177 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TrackingSummaryEnv"
+                            "$ref": "#/definitions/internal_transport_http.TrackingSummaryEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiError"
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/trips": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trips"
+                ],
+                "summary": "List detected trips for the authenticated user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by status: TRIP_ACTIVE or TRIP_COMPLETED",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.TripListEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/trips/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trips"
+                ],
+                "summary": "Get a single trip by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trip UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.TripEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/trips/{id}/points": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trips"
+                ],
+                "summary": "Get GPS points for a trip (polyline)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trip UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results per page (default 500, max 5000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.TripPointsEnv"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
                         }
                     }
                 }
@@ -460,7 +821,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "http.ApiError": {
+        "internal_transport_http.ApiError": {
             "type": "object",
             "properties": {
                 "data": {
@@ -472,7 +833,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.Device": {
+        "internal_transport_http.Device": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -495,24 +856,24 @@ const docTemplate = `{
                 }
             }
         },
-        "http.DeviceEnv": {
+        "internal_transport_http.DeviceEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.Device"
+                    "$ref": "#/definitions/internal_transport_http.Device"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "http.DevicesEnv": {
+        "internal_transport_http.DevicesEnv": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/http.Device"
+                        "$ref": "#/definitions/internal_transport_http.Device"
                     }
                 },
                 "error": {
@@ -520,7 +881,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.Healthz": {
+        "internal_transport_http.Healthz": {
             "type": "object",
             "properties": {
                 "status": {
@@ -529,18 +890,18 @@ const docTemplate = `{
                 }
             }
         },
-        "http.HealthzEnv": {
+        "internal_transport_http.HealthzEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.Healthz"
+                    "$ref": "#/definitions/internal_transport_http.Healthz"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "http.LoginReq": {
+        "internal_transport_http.LoginReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -551,7 +912,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.Me": {
+        "internal_transport_http.Me": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -565,18 +926,18 @@ const docTemplate = `{
                 }
             }
         },
-        "http.MeEnv": {
+        "internal_transport_http.MeEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.Me"
+                    "$ref": "#/definitions/internal_transport_http.Me"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "http.RefreshReq": {
+        "internal_transport_http.RefreshReq": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -584,7 +945,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.RegisterDeviceReq": {
+        "internal_transport_http.RegisterDeviceReq": {
             "type": "object",
             "properties": {
                 "device_id": {
@@ -601,7 +962,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.RegisterReq": {
+        "internal_transport_http.RegisterReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -614,7 +975,160 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TokenPair": {
+        "internal_transport_http.RouteEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.RouteItem"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "number"
+                },
+                "end_lat": {
+                    "type": "number"
+                },
+                "end_lon": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "start_lat": {
+                    "type": "number"
+                },
+                "start_lon": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trips_count": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteListEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.RouteListResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.RouteItem"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RoutePointItem": {
+            "type": "object",
+            "properties": {
+                "lat": {
+                    "type": "number"
+                },
+                "lon": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_transport_http.RoutePointsEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.RoutePointItem"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteTripItem": {
+            "type": "object",
+            "properties": {
+                "distance_m": {
+                    "type": "number"
+                },
+                "duration_sec": {
+                    "type": "integer"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "match_score": {
+                    "type": "number"
+                },
+                "matched_at": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "trip_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteTripListEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.RouteTripListResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.RouteTripListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.RouteTripItem"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TokenPair": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -625,18 +1139,18 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TokenPairEnv": {
+        "internal_transport_http.TokenPairEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.TokenPair"
+                    "$ref": "#/definitions/internal_transport_http.TokenPair"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "http.TrackingPoint": {
+        "internal_transport_http.TrackingPoint": {
             "type": "object",
             "properties": {
                 "accuracy_m": {
@@ -673,24 +1187,24 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TrackingPointsEnv": {
+        "internal_transport_http.TrackingPointsEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.TrackingPointsResponse"
+                    "$ref": "#/definitions/internal_transport_http.TrackingPointsResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "http.TrackingPointsResponse": {
+        "internal_transport_http.TrackingPointsResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/http.TrackingPoint"
+                        "$ref": "#/definitions/internal_transport_http.TrackingPoint"
                     }
                 },
                 "next_cursor": {
@@ -698,7 +1212,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TrackingSummary": {
+        "internal_transport_http.TrackingSummary": {
             "type": "object",
             "properties": {
                 "avg_speed_mps": {
@@ -725,13 +1239,156 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TrackingSummaryEnv": {
+        "internal_transport_http.TrackingSummaryEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.TrackingSummary"
+                    "$ref": "#/definitions/internal_transport_http.TrackingSummary"
                 },
                 "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.TripItem"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-06-10T08:00:01Z"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "number",
+                    "example": 4200.5
+                },
+                "duration_sec": {
+                    "type": "integer",
+                    "example": 1800
+                },
+                "end_lat": {
+                    "type": "number"
+                },
+                "end_lon": {
+                    "type": "number"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "points_count": {
+                    "type": "integer",
+                    "example": 540
+                },
+                "start_lat": {
+                    "type": "number",
+                    "example": 55.7558
+                },
+                "start_lon": {
+                    "type": "number",
+                    "example": 37.6173
+                },
+                "started_at": {
+                    "type": "string",
+                    "example": "2026-06-10T08:00:00Z"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "TRIP_COMPLETED"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2026-06-10T08:30:00Z"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripListEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.TripListResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.TripItem"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripPointItem": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number",
+                    "example": 55.7558
+                },
+                "lon": {
+                    "type": "number",
+                    "example": 37.6173
+                },
+                "recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T08:01:00Z"
+                },
+                "trip_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripPointsEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.TripPointsResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TripPointsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.TripPointItem"
+                    }
+                },
+                "next_cursor": {
                     "type": "string"
                 }
             }

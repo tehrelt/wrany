@@ -1,4 +1,4 @@
-import { LogOut, MapPin, Route, Activity } from 'lucide-react'
+import { LogOut, MapPin, Route, Activity, Navigation } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -40,6 +40,16 @@ export function AppLayout({ userEmail, onLogout, sidebar, children }: AppLayoutP
               >
                 <Route className="h-4 w-4" />
                 <span className="hidden sm:inline">Trips</span>
+              </Button>
+            </Link>
+            <Link to="/routes">
+              <Button
+                variant={pathname === '/routes' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="gap-1.5 h-8"
+              >
+                <Navigation className="h-4 w-4" />
+                <span className="hidden sm:inline">Routes</span>
               </Button>
             </Link>
           </nav>
