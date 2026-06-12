@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+In Progress
 
 ---
 
@@ -354,7 +354,32 @@ AsyncStorage использует SharedPreferences под капотом.
 
 ## Implementation Log
 
-_Будет заполняться в процессе реализации._
+### 2026-06-12 — Фазы 1-4: Native foundation + RN UI
+
+**Изменения:**
+- `android/build.gradle`: добавлен KSP plugin (`com.google.devtools.ksp:2.1.20-1.0.32`)
+- `android/app/build.gradle`: KSP + Room 2.6.1 + FusedLocation 21.3.0 + OkHttp 4.12.0
+- `AndroidManifest.xml`: добавлены permissions (BACKGROUND_LOCATION, FOREGROUND_SERVICE, FOREGROUND_SERVICE_LOCATION, POST_NOTIFICATIONS, NETWORK_STATE) + service declaration с `foregroundServiceType="location"`
+- `tracking/TrackingNotification.kt`: notification channel (IMPORTANCE_LOW) + builder с pending count и stop action
+- `tracking/LocationQueue.kt`: Room entity `LocationPoint` + DAO + DB singleton
+- `tracking/LocationProvider.kt`: FusedLocationProviderClient wrapper (12s interval, 5s fastest, 15m distance)
+- `tracking/BatchSender.kt`: OkHttp WS client, session.start → location.batch → ACK handler, exponential backoff reconnect (1s→30s max), batch size 20
+- `tracking/TrackingForegroundService.kt`: Foreground service с START_STICKY, notification updater каждые 10s
+- `tracking/TrackingModule.kt`: RN bridge — enableTracking/disableTracking/getTrackingStatus/flushNow/clearFailed/updateToken
+- `tracking/TrackingPackage.kt`: ReactPackage регистрация
+- `MainApplication.kt`: TrackingPackage + создание notification channel при onCreate
+- `src/features/tracking/types.ts`, `trackingNativeModule.ts`, `TrackingStatusScreen.tsx`: RN UI
+- `src/app/App.tsx`: tab-переключение Background/Legacy WS
+
+**Решения:**
+- kapt → KSP (kapt несовместим с Kotlin 2.1.x; metadata version mismatch)
+- Credentials хранятся в native SharedPreferences `wrany_tracking` (не AsyncStorage)
+- event_id = UUID при INSERT в SQLite, не меняется при retry — idempotency гарантирована
+- BatchSender: max 1 inflight batch для MVP
+
+**Результат:**
+- `./gradlew assembleDebug` — BUILD SUCCESSFUL
+- `make test` — все backend тесты зелёные
 
 ---
 
