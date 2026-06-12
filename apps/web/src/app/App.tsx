@@ -7,6 +7,7 @@ import { AuthProvider } from '@/features/auth/AuthContext'
 import { AuthGuard } from '@/features/auth/AuthGuard'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { TripsPage } from '@/pages/TripsPage'
 
 function AppRoutes() {
   const { isAuthenticated, logout } = useAuth()
@@ -22,6 +23,14 @@ function AppRoutes() {
         element={
           <AuthGuard isAuthenticated={isAuthenticated}>
             <DashboardPage onLogout={logout} />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/trips"
+        element={
+          <AuthGuard isAuthenticated={isAuthenticated}>
+            <TripsPage onLogout={logout} />
           </AuthGuard>
         }
       />
