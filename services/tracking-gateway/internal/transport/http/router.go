@@ -8,13 +8,14 @@ import (
 )
 
 type RouterDeps struct {
-	Auth           *usecase.AuthUsecase
-	Device         *usecase.DeviceUsecase
-	Me             *usecase.MeUsecase
-	Tracker        *usecase.TrackerIngestionUseCase
-	TrackingQuery  *usecase.TrackingQueryUsecase
-	JWTSecret      []byte
-	Config         config.Config
+	Auth          *usecase.AuthUsecase
+	Device        *usecase.DeviceUsecase
+	Me            *usecase.MeUsecase
+	Tracker       *usecase.TrackerIngestionUseCase
+	TrackingQuery *usecase.TrackingQueryUsecase
+	Trips         *usecase.TripQueryUsecase
+	JWTSecret     []byte
+	Config        config.Config
 }
 
 func NewRouter(deps RouterDeps) *http.ServeMux {
@@ -26,6 +27,7 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	meH := NewMeHandler(deps.Me)
 	trackerH := NewTrackerHandler(deps.Tracker, deps.Config)
 	trackingQueryH := NewTrackingQueryHandler(deps.TrackingQuery)
+	tripH := NewTripHandler(deps.Trips)
 
 	mux.HandleFunc("/healthz", HealthzHandler)
 	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
@@ -38,6 +40,9 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	mux.Handle("GET /v1/tracking/points", auth(http.HandlerFunc(trackingQueryH.GetPoints)))
 	mux.Handle("GET /v1/tracking/summary", auth(http.HandlerFunc(trackingQueryH.GetSummary)))
 	mux.Handle("DELETE /v1/tracking/points/{event_id}", auth(http.HandlerFunc(trackingQueryH.DeletePoint)))
+	mux.Handle("GET /v1/trips", auth(http.HandlerFunc(tripH.ListTrips)))
+	mux.Handle("GET /v1/trips/{id}", auth(http.HandlerFunc(tripH.GetTrip)))
+	mux.Handle("GET /v1/trips/{id}/points", auth(http.HandlerFunc(tripH.GetTripPoints)))
 	wsAuth := WSAuthMiddleware(deps.JWTSecret)
 	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 

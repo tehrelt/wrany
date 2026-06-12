@@ -132,3 +132,61 @@ type TrackingSummaryEnv struct {
 	Data  TrackingSummary `json:"data"`
 	Error *string         `json:"error"`
 }
+
+// TripItem is a single trip in list/detail responses.
+type TripItem struct {
+	ID          string   `json:"id"`
+	UserID      string   `json:"user_id"`
+	DeviceID    string   `json:"device_id"`
+	Status      string   `json:"status"       example:"TRIP_COMPLETED"`
+	StartedAt   string   `json:"started_at"   example:"2026-06-10T08:00:00Z"`
+	EndedAt     *string  `json:"ended_at"`
+	StartLat    float64  `json:"start_lat"    example:"55.7558"`
+	StartLon    float64  `json:"start_lon"    example:"37.6173"`
+	EndLat      *float64 `json:"end_lat"`
+	EndLon      *float64 `json:"end_lon"`
+	DistanceM   float64  `json:"distance_m"   example:"4200.5"`
+	DurationSec int64    `json:"duration_sec" example:"1800"`
+	PointsCount int      `json:"points_count" example:"540"`
+	CreatedAt   string   `json:"created_at"   example:"2026-06-10T08:00:01Z"`
+	UpdatedAt   string   `json:"updated_at"   example:"2026-06-10T08:30:00Z"`
+}
+
+// TripListResponse is the data payload for GET /v1/trips.
+type TripListResponse struct {
+	Items      []TripItem `json:"items"`
+	NextCursor *string    `json:"next_cursor"`
+}
+
+// TripPointItem is a single GPS point in the trip polyline.
+type TripPointItem struct {
+	EventID    string  `json:"event_id"`
+	TripID     string  `json:"trip_id"`
+	RecordedAt string  `json:"recorded_at" example:"2026-06-10T08:01:00Z"`
+	Lat        float64 `json:"lat"         example:"55.7558"`
+	Lon        float64 `json:"lon"         example:"37.6173"`
+}
+
+// TripPointsResponse is the data payload for GET /v1/trips/{id}/points.
+type TripPointsResponse struct {
+	Items      []TripPointItem `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+}
+
+// TripEnv is the envelope for GET /v1/trips/{id}.
+type TripEnv struct {
+	Data  TripItem `json:"data"`
+	Error *string  `json:"error"`
+}
+
+// TripListEnv is the envelope for GET /v1/trips.
+type TripListEnv struct {
+	Data  TripListResponse `json:"data"`
+	Error *string          `json:"error"`
+}
+
+// TripPointsEnv is the envelope for GET /v1/trips/{id}/points.
+type TripPointsEnv struct {
+	Data  TripPointsResponse `json:"data"`
+	Error *string            `json:"error"`
+}
