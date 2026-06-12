@@ -11,6 +11,7 @@ import (
 
 	eventbusnats "github.com/wrany/libs/eventbus/nats"
 	"github.com/wrany/tracking-worker/internal/config"
+	"github.com/wrany/tracking-worker/internal/domain"
 	"github.com/wrany/tracking-worker/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-worker/internal/transport/http"
 	natstransport "github.com/wrany/tracking-worker/internal/transport/nats"
@@ -19,10 +20,12 @@ import (
 
 // App wires all components and manages the service lifecycle.
 type App struct {
-	httpSrv          *http.Server
-	locationConsumer *natstransport.LocationConsumer
-	bus              *eventbusnats.Bus
-	db               *pgxpool.Pool
+	httpSrv            *http.Server
+	locationConsumer   *natstransport.LocationConsumer
+	tripDetectionJob   *usecase.TripDetectionJob
+	tripDetectionIvl   time.Duration
+	bus                *eventbusnats.Bus
+	db                 *pgxpool.Pool
 }
 
 // New builds the App from config: connects to Postgres and NATS,
@@ -70,14 +73,17 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 
 	// Wire storage → usecase → transport.
-	repo := postgres.NewRawLocationRepo(db)
+	rawRepo := postgres.NewRawLocationRepo(db)
 	processor := usecase.NewLocationEventProcessor(
-		repo,
+		rawRepo,
 		bus,
 		"tracking-worker",
 		cfg.NatsLocationConsumerDurable,
 	)
 	locationConsumer := natstransport.NewLocationConsumer(consumer, processor)
+
+	tripRepo := postgres.NewTripRepo(db)
+	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", domain.DefaultTripDetectionConfig())
 
 	return &App{
 		httpSrv: &http.Server{
@@ -85,6 +91,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			Handler: httptransport.NewRouter(),
 		},
 		locationConsumer: locationConsumer,
+		tripDetectionJob: tripJob,
+		tripDetectionIvl: time.Duration(cfg.TripDetectionIntervalSec) * time.Second,
 		bus:              bus,
 		db:               db,
 	}, nil
@@ -97,6 +105,21 @@ func (a *App) Run(ctx context.Context) error {
 		log.Printf("tracking-worker: HTTP health server on %s", a.httpSrv.Addr)
 		if err := a.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("tracking-worker: HTTP server error: %v", err)
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(a.tripDetectionIvl)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := a.tripDetectionJob.RunOnce(ctx); err != nil {
+					log.Printf("trip_detection_job: %v", err)
+				}
+			}
 		}
 	}()
 
