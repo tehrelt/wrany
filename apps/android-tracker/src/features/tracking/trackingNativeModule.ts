@@ -3,7 +3,11 @@ import type { TrackingStatus } from './types';
 
 const { TrackingModule } = NativeModules as {
   TrackingModule: {
-    enableTracking(deviceId: string, token: string, wsUrl: string): Promise<void>;
+    enableTracking(
+      deviceId: string,
+      token: string,
+      wsUrl: string,
+    ): Promise<void>;
     disableTracking(): Promise<void>;
     getTrackingStatus(): Promise<TrackingStatus>;
     flushNow(): Promise<void>;

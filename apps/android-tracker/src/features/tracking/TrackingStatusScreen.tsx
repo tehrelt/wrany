@@ -14,7 +14,11 @@ import { WS_URL } from '../../config/env';
 import { getOrCreateDeviceId } from '../../tracker/deviceId';
 import { getAccessToken } from '../../storage/tokenStorage';
 import { trackingModule } from './trackingNativeModule';
-import type { PermissionsStatus, PermissionState, TrackingStatus } from './types';
+import type {
+  PermissionsStatus,
+  PermissionState,
+  TrackingStatus,
+} from './types';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -172,9 +176,13 @@ export function TrackingStatusScreen(): React.JSX.Element {
         {bgDenied && (
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
-              Background location not granted — tracking stops when app is closed.
+              Background location not granted — tracking stops when app is
+              closed.
             </Text>
-            <Button title="Open Settings" onPress={openBackgroundLocationSettings} />
+            <Button
+              title="Open Settings"
+              onPress={openBackgroundLocationSettings}
+            />
           </View>
         )}
       </Section>
@@ -186,7 +194,9 @@ export function TrackingStatusScreen(): React.JSX.Element {
         <Row label="Failed points" value={String(status.failedCount)} />
         <Row
           label="Last location"
-          value={status.lastLocationTime ? formatTime(status.lastLocationTime) : '—'}
+          value={
+            status.lastLocationTime ? formatTime(status.lastLocationTime) : '—'
+          }
         />
         <Row
           label="Last sync"
@@ -198,13 +208,19 @@ export function TrackingStatusScreen(): React.JSX.Element {
       <Section title="Controls">
         <View style={styles.buttonRow}>
           <Button
-            title={status.serviceRunning ? 'Disable tracking' : 'Enable tracking'}
+            title={
+              status.serviceRunning ? 'Disable tracking' : 'Enable tracking'
+            }
             onPress={status.serviceRunning ? handleDisable : handleEnable}
             disabled={busy}
           />
         </View>
         <View style={styles.buttonRow}>
-          <Button title="Flush now" onPress={handleFlush} disabled={!status.serviceRunning} />
+          <Button
+            title="Flush now"
+            onPress={handleFlush}
+            disabled={!status.serviceRunning}
+          />
         </View>
         <View style={styles.buttonRow}>
           <Button
@@ -222,7 +238,8 @@ export function TrackingStatusScreen(): React.JSX.Element {
       )}
 
       <Text style={styles.note}>
-        Tracking is automatic — the backend detects trips, routes, and records from GPS points.
+        Tracking is automatic — the backend detects trips, routes, and records
+        from GPS points.
       </Text>
     </ScrollView>
   );
@@ -243,15 +260,22 @@ function Section({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }): React.JSX.Element {
-  const isGood =
-    value === 'yes' || value === 'granted' || value === 'running';
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}): React.JSX.Element {
+  const isGood = value === 'yes' || value === 'granted' || value === 'running';
   const isBad =
     value === 'no' || value === 'denied' || value === 'never_ask_again';
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, isGood && styles.good, isBad && styles.bad]}>
+      <Text
+        style={[styles.rowValue, isGood && styles.good, isBad && styles.bad]}
+      >
         {value}
       </Text>
     </View>
@@ -279,16 +303,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#666', marginBottom: 8, textTransform: 'uppercase' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
   rowLabel: { fontSize: 14, color: '#333' },
   rowValue: { fontSize: 14, color: '#333', fontWeight: '500' },
   good: { color: '#2e7d32' },
   bad: { color: '#c62828' },
   buttonRow: { marginVertical: 4 },
-  warningBox: { marginTop: 8, padding: 8, backgroundColor: '#fff3e0', borderRadius: 6 },
+  warningBox: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#fff3e0',
+    borderRadius: 6,
+  },
   warningText: { fontSize: 13, color: '#e65100', marginBottom: 6 },
-  errorBox: { marginTop: 8, padding: 10, backgroundColor: '#ffebee', borderRadius: 6 },
+  errorBox: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#ffebee',
+    borderRadius: 6,
+  },
   errorText: { color: '#b71c1c', fontSize: 13 },
   note: { marginTop: 16, fontSize: 12, color: '#888', textAlign: 'center' },
 });

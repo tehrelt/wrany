@@ -378,8 +378,9 @@ AsyncStorage использует SharedPreferences под капотом.
 - BatchSender: max 1 inflight batch для MVP
 
 **Результат:**
-- `./gradlew assembleDebug` — BUILD SUCCESSFUL
+- `./gradlew assembleDebug assembleDebugAndroidTest` — BUILD SUCCESSFUL (оба APK)
 - `make test` — все backend тесты зелёные
+- 9 инструментальных тестов: LocationQueueTest (insert, ACK, retry, stable id, cleanup, ordering)
 
 ---
 

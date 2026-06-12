@@ -1,10 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { clearTokens, getAccessToken } from '../storage/tokenStorage';
 import { AuthScreen } from '../screens/AuthScreen';
 import { TrackerScreen } from '../screens/TrackerScreen';
@@ -40,15 +35,24 @@ export function App(): React.JSX.Element {
       <View style={styles.tabs}>
         <TouchableOpacity
           style={[styles.tab, tab === 'background' && styles.activeTab]}
-          onPress={() => setTab('background')}>
-          <Text style={[styles.tabText, tab === 'background' && styles.activeTabText]}>
+          onPress={() => setTab('background')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              tab === 'background' && styles.activeTabText,
+            ]}
+          >
             Background
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, tab === 'legacy' && styles.activeTab]}
-          onPress={() => setTab('legacy')}>
-          <Text style={[styles.tabText, tab === 'legacy' && styles.activeTabText]}>
+          onPress={() => setTab('legacy')}
+        >
+          <Text
+            style={[styles.tabText, tab === 'legacy' && styles.activeTabText]}
+          >
             Legacy WS
           </Text>
         </TouchableOpacity>
