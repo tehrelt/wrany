@@ -125,9 +125,94 @@ services:
     profiles:
       - tools
 
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - wrany-net
+    profiles:
+      - observability
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks:
+      - wrany-net
+    depends_on:
+      - prometheus
+    profiles:
+      - observability
+
+  loki:
+    image: grafana/loki:3.0.0
+    volumes:
+      - ./infra/observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/var/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - wrany-net
+    profiles:
+      - observability
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    volumes:
+      - ./infra/observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - wrany-net
+    depends_on:
+      - loki
+    profiles:
+      - observability
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DSN:-postgresql://wrany:wrany@postgres:5432/wrany?sslmode=disable}
+    ports:
+      - "9187:9187"
+    networks:
+      - wrany-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - observability
+
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.15.0
+    command: ["-varz", "-jsz=all", "http://nats:8222"]
+    ports:
+      - "7777:7777"
+    networks:
+      - wrany-net
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles:
+      - observability
+
 volumes:
   postgres_data:
   nats_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
 networks:
   wrany-net:

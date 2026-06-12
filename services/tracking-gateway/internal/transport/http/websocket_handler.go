@@ -14,6 +14,7 @@ import (
 
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/domain"
+	"github.com/wrany/tracking-gateway/internal/observ"
 	"github.com/wrany/tracking-gateway/internal/usecase"
 )
 
@@ -22,10 +23,11 @@ type TrackerHandler struct {
 	ingestion *usecase.TrackerIngestionUseCase
 	upgrader  websocket.Upgrader
 	cfg       config.Config
+	metrics   *observ.GatewayMetrics
 }
 
 // NewTrackerHandler constructs a TrackerHandler with the correct upgrader config.
-func NewTrackerHandler(ingestion *usecase.TrackerIngestionUseCase, cfg config.Config) *TrackerHandler {
+func NewTrackerHandler(ingestion *usecase.TrackerIngestionUseCase, cfg config.Config, metrics *observ.GatewayMetrics) *TrackerHandler {
 	allowedOrigins := make(map[string]struct{}, len(cfg.WSAllowedOrigins))
 	for _, o := range cfg.WSAllowedOrigins {
 		allowedOrigins[o] = struct{}{}
@@ -49,7 +51,7 @@ func NewTrackerHandler(ingestion *usecase.TrackerIngestionUseCase, cfg config.Co
 			return true
 		},
 	}
-	return &TrackerHandler{ingestion: ingestion, upgrader: upgrader, cfg: cfg}
+	return &TrackerHandler{ingestion: ingestion, upgrader: upgrader, cfg: cfg, metrics: metrics}
 }
 
 // ServeHTTP validates JWT (via AuthMiddleware), upgrades to WebSocket,
@@ -63,14 +65,27 @@ func (h *TrackerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Capture request context before upgrade — gorilla does not thread it through.
 	ctx := r.Context()
+	sessionID := uuid.NewString()
+
+	// Enrich context logger with WS correlation fields.
+	log := slog.Default().With("session_id", sessionID, "user_id", userID)
 
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("ws: upgrade failed", "user_id", userID, "err", err)
+		log.Error("ws: upgrade failed", "err", err)
 		return
 	}
-	slog.Info("ws: connected", "user_id", userID)
-	defer conn.Close()
+	log.Info("ws: connected")
+	if h.metrics != nil {
+		h.metrics.WSConnectionsTotal.Inc()
+		h.metrics.WSConnectionsActive.Inc()
+	}
+	defer func() {
+		if h.metrics != nil {
+			h.metrics.WSConnectionsActive.Dec()
+		}
+		conn.Close()
+	}()
 
 	// Transport-level read limit (before JSON decode).
 	conn.SetReadLimit(h.cfg.WSMaxMessageSizeBytes)
@@ -106,18 +121,19 @@ func (h *TrackerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	defer close(connClosed)
 
-	h.readLoop(ctx, conn, userID, writeDeadline)
+	h.readLoop(ctx, conn, log, writeDeadline)
 }
 
 // readLoop reads and dispatches messages until the connection closes.
-func (h *TrackerHandler) readLoop(ctx context.Context, conn *websocket.Conn, userID uuid.UUID, writeDeadline time.Duration) {
+// log is pre-enriched with session_id and user_id.
+func (h *TrackerHandler) readLoop(ctx context.Context, conn *websocket.Conn, log *slog.Logger, writeDeadline time.Duration) {
 	var session *domain.TrackerSession
 
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				slog.Warn("ws: unexpected close", "user_id", userID, "err", err)
+				log.Warn("ws: unexpected close", "err", err)
 			}
 			return
 		}
@@ -137,14 +153,14 @@ func (h *TrackerHandler) readLoop(ctx context.Context, conn *websocket.Conn, use
 			}
 
 		case MsgTypeSessionStart:
-			session = h.handleSessionStart(ctx, conn, msg, userID)
+			session = h.handleSessionStart(ctx, conn, log, msg)
 
 		case MsgTypeLocationBatch:
 			if session == nil {
 				sendWSError(conn, msg.RequestID, domain.ErrCodeSessionNotAccepted, "send session.start first")
 				continue
 			}
-			if stop := h.handleLocationBatch(ctx, conn, msg, session); stop {
+			if stop := h.handleLocationBatch(ctx, conn, log, msg, session); stop {
 				return
 			}
 
@@ -155,7 +171,8 @@ func (h *TrackerHandler) readLoop(ctx context.Context, conn *websocket.Conn, use
 }
 
 // handleSessionStart processes session.start and returns the new session (nil on failure).
-func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket.Conn, msg WsMessage, userID uuid.UUID) *domain.TrackerSession {
+// log is pre-enriched with session_id/user_id.
+func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket.Conn, log *slog.Logger, msg WsMessage) *domain.TrackerSession {
 	var payload SessionStartPayload
 	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 		sendWSError(conn, msg.RequestID, domain.ErrCodeValidationError, "invalid session.start payload")
@@ -168,13 +185,18 @@ func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket
 		return nil
 	}
 
+	// Extract user_id from the enriched logger's context by pulling it from context.
+	userID, _ := UserIDFromContext(ctx)
 	session, err := h.ingestion.StartSession(ctx, userID, deviceID)
 	if err != nil {
 		if errors.Is(err, domain.ErrDeviceNotFound) {
+			if h.metrics != nil {
+				h.metrics.WSSessionsRejected.Inc()
+			}
 			sendWSError(conn, msg.RequestID, domain.ErrCodeDeviceNotRegistered, "device not registered for this user")
 			return nil
 		}
-		slog.Error("ws: start session", "user_id", userID, "err", err)
+		log.Error("ws: start session", "device_id", deviceID, "err", err)
 		sendWSError(conn, msg.RequestID, domain.ErrCodeInternalError, "internal error")
 		return nil
 	}
@@ -188,15 +210,19 @@ func (h *TrackerHandler) handleSessionStart(ctx context.Context, conn *websocket
 		},
 	}
 	if err := sendWSMessage(conn, MsgTypeSessionAccepted, msg.RequestID, accepted); err != nil {
-		slog.Error("ws: send session.accepted", "user_id", userID, "err", err)
+		log.Error("ws: send session.accepted", "device_id", deviceID, "err", err)
 		return nil
 	}
-	slog.Info("ws: session accepted", "user_id", userID, "device_id", deviceID, "session_id", session.ID)
+	if h.metrics != nil {
+		h.metrics.WSSessionsAccepted.Inc()
+	}
+	log.Info("ws: session accepted", "device_id", deviceID)
 	return session
 }
 
 // handleLocationBatch processes location.batch. Returns true if the connection should close.
-func (h *TrackerHandler) handleLocationBatch(ctx context.Context, conn *websocket.Conn, msg WsMessage, session *domain.TrackerSession) bool {
+// log is pre-enriched with session_id/user_id.
+func (h *TrackerHandler) handleLocationBatch(ctx context.Context, conn *websocket.Conn, log *slog.Logger, msg WsMessage, session *domain.TrackerSession) bool {
 	var payload LocationBatchPayload
 	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 		sendWSError(conn, msg.RequestID, domain.ErrCodeValidationError, "invalid location.batch payload")
@@ -210,14 +236,26 @@ func (h *TrackerHandler) handleLocationBatch(ctx context.Context, conn *websocke
 
 	domainEvents, parseRejects := parseLocationEvents(payload.Events)
 
+	if h.metrics != nil {
+		h.metrics.LocationBatchesReceived.Inc()
+		h.metrics.LocationPointsReceived.Add(float64(len(domainEvents)))
+	}
+
 	result, err := h.ingestion.IngestBatch(ctx, session, domainEvents)
 	if err != nil {
+		if h.metrics != nil {
+			h.metrics.LocationBatchesRejected.Inc()
+		}
 		code, ok := usecase.IngestionErrCode(err)
 		if !ok {
 			code = domain.ErrCodeInternalError
 		}
 		sendWSError(conn, msg.RequestID, code, err.Error())
 		return false
+	}
+
+	if h.metrics != nil {
+		h.metrics.LocationBatchesAcked.Inc()
 	}
 
 	allRejected := make([]RejectedMsg, 0, len(parseRejects)+len(result.Rejected))
@@ -234,7 +272,7 @@ func (h *TrackerHandler) handleLocationBatch(ctx context.Context, conn *websocke
 		Rejected:   allRejected,
 	}
 	if err := sendWSMessage(conn, MsgTypeLocationBatchAck, msg.RequestID, ack); err != nil {
-		slog.Error("ws: send location.batch.ack", "err", err)
+		log.Error("ws: send location.batch.ack", "err", err)
 		return true
 	}
 	return false

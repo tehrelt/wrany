@@ -7,12 +7,22 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	obslogger "github.com/wrany/libs/observability/logger"
+	"github.com/wrany/tracking-gateway/internal/observ"
 )
+
+var reUUID = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+func normalizePath(p string) string {
+	return reUUID.ReplaceAllString(p, "{id}")
+}
 
 type contextKey int
 
@@ -134,17 +144,29 @@ func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 // LoggingMiddleware logs method, path, status, and latency for every request.
-func LoggingMiddleware(next http.Handler) http.Handler {
+// When metrics is non-nil it also records Prometheus counters and histograms.
+func LoggingMiddleware(next http.Handler, metrics *observ.GatewayMetrics) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
+
+		duration := time.Since(start)
+		requestID := obslogger.RequestIDFromContext(r.Context())
 		slog.Info("http",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
-			"latency_ms", time.Since(start).Milliseconds(),
+			"latency_ms", duration.Milliseconds(),
+			"request_id", requestID,
 		)
+
+		if metrics != nil {
+			endpoint := normalizePath(r.URL.Path)
+			code := strconv.Itoa(sw.status)
+			metrics.HTTP.RequestsTotal.WithLabelValues(r.Method, endpoint, code).Inc()
+			metrics.HTTP.RequestDuration.WithLabelValues(r.Method, endpoint).Observe(duration.Seconds())
+		}
 	})
 }
 

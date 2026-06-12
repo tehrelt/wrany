@@ -3,7 +3,10 @@ package http
 import (
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	obsmiddleware "github.com/wrany/libs/observability/middleware"
 	"github.com/wrany/tracking-gateway/internal/config"
+	"github.com/wrany/tracking-gateway/internal/observ"
 	"github.com/wrany/tracking-gateway/internal/usecase"
 )
 
@@ -18,23 +21,29 @@ type RouterDeps struct {
 	RouteResults  *usecase.RouteResultQueryUsecase
 	JWTSecret     []byte
 	Config        config.Config
+	Metrics       *observ.GatewayMetrics
 }
 
-func NewRouter(deps RouterDeps) *http.ServeMux {
+// NewRouter returns the full HTTP handler chain:
+// RequestID → Logging/Metrics → CORSMiddleware → mux.
+func NewRouter(deps RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	auth := AuthMiddleware(deps.JWTSecret)
 
 	authH := NewAuthHandler(deps.Auth)
 	deviceH := NewDeviceHandler(deps.Device)
 	meH := NewMeHandler(deps.Me)
-	trackerH := NewTrackerHandler(deps.Tracker, deps.Config)
+	trackerH := NewTrackerHandler(deps.Tracker, deps.Config, deps.Metrics)
 	trackingQueryH := NewTrackingQueryHandler(deps.TrackingQuery)
 	tripH := NewTripHandler(deps.Trips)
 	routeH := NewRouteHandler(deps.Routes)
 	routeResultH := NewRouteResultHandler(deps.RouteResults)
 
+	// Observability endpoints — no auth, no logging overhead.
+	mux.Handle("GET /metrics", promhttp.HandlerFor(deps.Metrics.Registry(), promhttp.HandlerOpts{}))
 	mux.HandleFunc("/healthz", HealthzHandler)
 	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
+
 	mux.HandleFunc("POST /v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /v1/auth/refresh", authH.Refresh)
@@ -56,5 +65,9 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	wsAuth := WSAuthMiddleware(deps.JWTSecret)
 	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 
-	return mux
+	var h http.Handler = mux
+	h = CORSMiddleware(h)
+	h = LoggingMiddleware(h, deps.Metrics)
+	h = obsmiddleware.RequestID(h)
+	return h
 }

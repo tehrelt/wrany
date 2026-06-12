@@ -107,7 +107,7 @@ func newWSTestEnv(t *testing.T) *wsTestEnv {
 	}
 
 	ingestionUC := usecase.NewTrackerIngestionUseCase(devices, dedup, pub, "test", 100)
-	trackerH := httptransport.NewTrackerHandler(ingestionUC, cfg)
+	trackerH := httptransport.NewTrackerHandler(ingestionUC, cfg, nil)
 
 	// Wrap in AuthMiddleware stub that injects the fixed userID.
 	mux := http.NewServeMux()

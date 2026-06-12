@@ -22,6 +22,7 @@ import (
 
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/migrations"
+	"github.com/wrany/tracking-gateway/internal/observ"
 	"github.com/wrany/tracking-gateway/internal/storage/postgres"
 	httptransport "github.com/wrany/tracking-gateway/internal/transport/http"
 	"github.com/wrany/tracking-gateway/internal/usecase"
@@ -87,6 +88,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, func()) {
 		Device:    usecase.NewDeviceUsecase(deviceRepo),
 		Me:        usecase.NewMeUsecase(userRepo),
 		JWTSecret: []byte(cfg.JWTSecret),
+		Metrics:   observ.NewGatewayMetrics(),
 	})
 
 	srv := httptest.NewServer(router)
