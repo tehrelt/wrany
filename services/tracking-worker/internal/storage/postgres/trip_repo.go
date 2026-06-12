@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/google/uuid"
 	"github.com/wrany/tracking-worker/internal/domain"
 )
 
@@ -27,10 +27,18 @@ func (r *TripRepo) LoadDistinctUserDevicePairs(ctx context.Context, before time.
 	const q = `
 		SELECT DISTINCT rlp.user_id, rlp.device_id
 		FROM raw_location_points rlp
+		LEFT JOIN processed_location_points plp
+			ON plp.user_id = rlp.user_id
+			AND plp.device_id = rlp.device_id
+			AND plp.event_id = rlp.event_id
 		LEFT JOIN trip_detection_state tds
 			ON tds.user_id = rlp.user_id AND tds.device_id = rlp.device_id
 		WHERE rlp.recorded_at < $1
-		  AND rlp.recorded_at >= COALESCE(tds.last_watermark_at, '-infinity'::timestamptz)`
+		  AND plp.event_id IS NULL
+		  AND rlp.recorded_at >= COALESCE(
+		      tds.last_processed_recorded_at - make_interval(secs => tds.late_arrival_window_sec),
+		      '-infinity'::timestamptz
+		  )`
 
 	rows, err := r.db.Query(ctx, q, before)
 	if err != nil {
@@ -50,7 +58,7 @@ func (r *TripRepo) LoadDistinctUserDevicePairs(ctx context.Context, before time.
 }
 
 // LoadState returns the persisted detection state for a pair.
-// Returns a default IDLE state (with LateArrivalWindowSec=300) when none is found.
+// Returns a default IDLE state when none is found.
 func (r *TripRepo) LoadState(ctx context.Context, userID, deviceID uuid.UUID) (domain.TripDetectionState, error) {
 	const q = `
 		SELECT
@@ -61,6 +69,7 @@ func (r *TripRepo) LoadState(ctx context.Context, userID, deviceID uuid.UUID) (d
 			candidate_distance_m,
 			candidate_start_lat,
 			candidate_start_lon,
+			candidate_good_points,
 			stop_started_at,
 			stop_center_lat,
 			stop_center_lon,
@@ -88,6 +97,7 @@ func (r *TripRepo) LoadState(ctx context.Context, userID, deviceID uuid.UUID) (d
 		&s.CandidateDistanceM,
 		&s.CandidateStartLat,
 		&s.CandidateStartLon,
+		&s.CandidateGoodPoints,
 		&s.StopStartedAt,
 		&s.StopCenterLat,
 		&s.StopCenterLon,
@@ -104,7 +114,7 @@ func (r *TripRepo) LoadState(ctx context.Context, userID, deviceID uuid.UUID) (d
 				UserID:               userID,
 				DeviceID:             deviceID,
 				State:                domain.StateIdle,
-				LateArrivalWindowSec: 300,
+				LateArrivalWindowSec: 45,
 			}, nil
 		}
 		return domain.TripDetectionState{}, fmt.Errorf("trip_repo: load state: %w", err)
@@ -114,7 +124,7 @@ func (r *TripRepo) LoadState(ctx context.Context, userID, deviceID uuid.UUID) (d
 }
 
 // FetchPoints returns raw_location_points in [from, to) for a pair, ordered by recorded_at ASC.
-func (r *TripRepo) FetchPoints(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time) ([]domain.RawLocationPoint, error) {
+func (r *TripRepo) FetchUnprocessedPoints(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time) ([]domain.RawLocationPoint, error) {
 	const q = `
 		SELECT
 			user_id, device_id, event_id,
@@ -123,12 +133,18 @@ func (r *TripRepo) FetchPoints(ctx context.Context, userID, deviceID uuid.UUID, 
 			accuracy_m, speed_mps, bearing_deg,
 			activity_type, activity_confidence, battery_level,
 			source
-		FROM raw_location_points
-		WHERE user_id = $1
-		  AND device_id = $2
-		  AND recorded_at >= $3
-		  AND recorded_at < $4
-		ORDER BY recorded_at ASC`
+		FROM raw_location_points rlp
+		WHERE rlp.user_id = $1
+		  AND rlp.device_id = $2
+		  AND rlp.recorded_at >= $3
+		  AND rlp.recorded_at < $4
+		  AND NOT EXISTS (
+		      SELECT 1 FROM processed_location_points plp
+		      WHERE plp.user_id = rlp.user_id
+		        AND plp.device_id = rlp.device_id
+		        AND plp.event_id = rlp.event_id
+		  )
+		ORDER BY rlp.recorded_at ASC, rlp.event_id ASC`
 
 	rows, err := r.db.Query(ctx, q, userID, deviceID, from, to)
 	if err != nil {
@@ -154,6 +170,60 @@ func (r *TripRepo) FetchPoints(ctx context.Context, userID, deviceID uuid.UUID, 
 	return pts, rows.Err()
 }
 
+func (r *TripRepo) FetchPoints(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time) ([]domain.RawLocationPoint, error) {
+	return r.FetchUnprocessedPoints(ctx, userID, deviceID, from, to)
+}
+
+func (r *TripRepo) FetchProcessedHistory(ctx context.Context, userID, deviceID uuid.UUID, before time.Time, limit int) ([]domain.ProcessedLocationPoint, error) {
+	const q = `
+		SELECT plp.user_id, plp.device_id, plp.event_id,
+		       plp.raw_lat, plp.raw_lon, plp.filtered_lat, plp.filtered_lon,
+		       plp.accuracy_m, plp.speed_mps, plp.implied_speed_mps, plp.distance_delta_m,
+		       COALESCE(rlp.activity_type, 'unknown'), rlp.activity_confidence,
+		       plp.is_accepted, plp.is_outlier, plp.is_stationary, plp.noise_reason,
+		       plp.stationary_since,
+		       plp.recorded_at, plp.received_at, plp.processed_at
+		FROM processed_location_points plp
+		JOIN raw_location_points rlp
+		  ON rlp.user_id = plp.user_id
+		 AND rlp.device_id = plp.device_id
+		 AND rlp.event_id = plp.event_id
+		WHERE plp.user_id = $1
+		  AND plp.device_id = $2
+		  AND plp.recorded_at < $3
+		  AND plp.is_accepted
+		ORDER BY plp.recorded_at DESC, plp.event_id DESC
+		LIMIT $4`
+	rows, err := r.db.Query(ctx, q, userID, deviceID, before, limit)
+	if err != nil {
+		return nil, fmt.Errorf("trip_repo: fetch history: %w", err)
+	}
+	defer rows.Close()
+	var reversed []domain.ProcessedLocationPoint
+	for rows.Next() {
+		var point domain.ProcessedLocationPoint
+		if err := rows.Scan(
+			&point.UserID, &point.DeviceID, &point.EventID,
+			&point.RawLat, &point.RawLon, &point.FilteredLat, &point.FilteredLon,
+			&point.AccuracyM, &point.SpeedMps, &point.ImpliedSpeedMps, &point.DistanceDeltaM,
+			&point.ActivityType, &point.ActivityConfidence,
+			&point.IsAccepted, &point.IsOutlier, &point.IsStationary, &point.NoiseReason,
+			&point.StationarySince,
+			&point.RecordedAt, &point.ReceivedAt, &point.ProcessedAt,
+		); err != nil {
+			return nil, fmt.Errorf("trip_repo: scan history: %w", err)
+		}
+		reversed = append(reversed, point)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for left, right := 0, len(reversed)-1; left < right; left, right = left+1, right-1 {
+		reversed[left], reversed[right] = reversed[right], reversed[left]
+	}
+	return reversed, nil
+}
+
 // ApplyBatch persists all detection results inside a single serialisable transaction.
 func (r *TripRepo) ApplyBatch(ctx context.Context, batch domain.TripDetectionBatch) error {
 	tx, err := r.db.Begin(ctx)
@@ -165,6 +235,10 @@ func (r *TripRepo) ApplyBatch(ctx context.Context, batch domain.TripDetectionBat
 			_ = tx.Rollback(ctx)
 		}
 	}()
+
+	if err = insertProcessedPoints(ctx, tx, batch.ProcessedPoints); err != nil {
+		return err
+	}
 
 	// 1. INSERT new trips.
 	for _, trip := range batch.NewTrips {
@@ -254,11 +328,12 @@ func backfillTripPoints(ctx context.Context, tx pgx.Tx, tripID, userID, deviceID
 	const q = `
 		INSERT INTO trip_points (trip_id, user_id, device_id, event_id, recorded_at)
 		SELECT $1, user_id, device_id, event_id, recorded_at
-		FROM raw_location_points
+		FROM processed_location_points
 		WHERE user_id = $2
 		  AND device_id = $3
 		  AND recorded_at >= $4
 		  AND recorded_at < $5
+		  AND is_accepted
 		ON CONFLICT DO NOTHING`
 
 	_, err := tx.Exec(ctx, q, tripID, userID, deviceID, since, before)
@@ -335,6 +410,7 @@ func upsertDetectionState(ctx context.Context, tx pgx.Tx, s domain.TripDetection
 			state, active_trip_id,
 			candidate_started_at, candidate_start_point_id,
 			candidate_distance_m, candidate_start_lat, candidate_start_lon,
+			candidate_good_points,
 			stop_started_at, stop_center_lat, stop_center_lon,
 			last_point_lat, last_point_lon,
 			last_processed_recorded_at,
@@ -345,11 +421,12 @@ func upsertDetectionState(ctx context.Context, tx pgx.Tx, s domain.TripDetection
 			$3,  $4,
 			$5,  $6,
 			$7,  $8,  $9,
-			$10, $11, $12,
-			$13, $14,
-			$15,
-			$16, $17,
-			$18
+			$10,
+			$11, $12, $13,
+			$14, $15,
+			$16,
+			$17, $18,
+			$19
 		)
 		ON CONFLICT (user_id, device_id) DO UPDATE SET
 			state                       = EXCLUDED.state,
@@ -359,6 +436,7 @@ func upsertDetectionState(ctx context.Context, tx pgx.Tx, s domain.TripDetection
 			candidate_distance_m        = EXCLUDED.candidate_distance_m,
 			candidate_start_lat         = EXCLUDED.candidate_start_lat,
 			candidate_start_lon         = EXCLUDED.candidate_start_lon,
+			candidate_good_points       = EXCLUDED.candidate_good_points,
 			stop_started_at             = EXCLUDED.stop_started_at,
 			stop_center_lat             = EXCLUDED.stop_center_lat,
 			stop_center_lon             = EXCLUDED.stop_center_lon,
@@ -374,14 +452,47 @@ func upsertDetectionState(ctx context.Context, tx pgx.Tx, s domain.TripDetection
 		string(s.State), s.ActiveTripID,
 		s.CandidateStartedAt, s.CandidateStartPointID,
 		s.CandidateDistanceM, s.CandidateStartLat, s.CandidateStartLon,
+		s.CandidateGoodPoints,
 		s.StopStartedAt, s.StopCenterLat, s.StopCenterLon,
-		s.LastPointLat, s.LastPointLon,
-		s.LastProcessedAt,
-		s.LastWatermarkAt, s.LateArrivalWindowSec,
-		s.UpdatedAt,
+		s.LastPointLat, s.LastPointLon, s.LastProcessedAt,
+		s.LastWatermarkAt, s.LateArrivalWindowSec, s.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("trip_repo: upsert state %s/%s: %w", s.UserID, s.DeviceID, err)
+	}
+	return nil
+}
+
+func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.ProcessedLocationPoint) error {
+	const q = `
+		INSERT INTO processed_location_points (
+			user_id, device_id, event_id,
+			raw_lat, raw_lon, filtered_lat, filtered_lon, filtered_geom,
+			accuracy_m, speed_mps, implied_speed_mps, distance_delta_m,
+			is_accepted, is_outlier, is_stationary, noise_reason, stationary_since,
+			recorded_at, received_at, processed_at
+		) VALUES (
+			$1, $2, $3,
+			$4, $5, $6, $7,
+			CASE WHEN $6::double precision IS NULL OR $7::double precision IS NULL
+			     THEN NULL
+			     ELSE ST_SetSRID(ST_MakePoint($7, $6), 4326)
+			END,
+			$8, $9, $10, $11,
+			$12, $13, $14, $15, $16,
+			$17, $18, $19
+		) ON CONFLICT (user_id, device_id, event_id) DO NOTHING`
+	for _, point := range points {
+		if _, err := tx.Exec(ctx, q,
+			point.UserID, point.DeviceID, point.EventID,
+			point.RawLat, point.RawLon, point.FilteredLat, point.FilteredLon,
+			point.AccuracyM, point.SpeedMps, point.ImpliedSpeedMps, point.DistanceDeltaM,
+			point.IsAccepted, point.IsOutlier, point.IsStationary, string(point.NoiseReason),
+			point.StationarySince,
+			point.RecordedAt, point.ReceivedAt, point.ProcessedAt,
+		); err != nil {
+			return fmt.Errorf("trip_repo: insert processed point %s: %w", point.EventID, err)
+		}
 	}
 	return nil
 }

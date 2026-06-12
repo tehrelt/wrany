@@ -9,6 +9,7 @@ import (
 	eventbus "github.com/wrany/libs/eventbus"
 	tripevents "github.com/wrany/libs/events/trip"
 	"github.com/wrany/tracking-worker/internal/domain"
+	"github.com/wrany/tracking-worker/internal/usecase/noise"
 )
 
 // TripDetectionRepository is the storage interface required by TripDetectionJob.
@@ -19,8 +20,8 @@ type TripDetectionRepository interface {
 	LoadDistinctUserDevicePairs(ctx context.Context, before time.Time) ([]domain.UserDevicePair, error)
 	// LoadState returns the persisted state for a pair; returns a default IDLE state if none exists.
 	LoadState(ctx context.Context, userID, deviceID uuid.UUID) (domain.TripDetectionState, error)
-	// FetchPoints returns raw_location_points in [from, to), ordered by recorded_at ASC.
-	FetchPoints(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time) ([]domain.RawLocationPoint, error)
+	FetchUnprocessedPoints(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time) ([]domain.RawLocationPoint, error)
+	FetchProcessedHistory(ctx context.Context, userID, deviceID uuid.UUID, before time.Time, limit int) ([]domain.ProcessedLocationPoint, error)
 	// ApplyBatch persists all detection results atomically.
 	ApplyBatch(ctx context.Context, batch domain.TripDetectionBatch) error
 }
@@ -32,6 +33,7 @@ type TripDetectionJob struct {
 	pub      eventbus.Publisher
 	producer string
 	cfg      domain.TripDetectionConfig
+	noise    *noise.Pipeline
 }
 
 // NewTripDetectionJob wires all dependencies.
@@ -40,6 +42,7 @@ func NewTripDetectionJob(
 	pub eventbus.Publisher,
 	producer string,
 	cfg domain.TripDetectionConfig,
+	noiseCfg domain.NoiseConfig,
 ) *TripDetectionJob {
 	return &TripDetectionJob{
 		repo:     repo,
@@ -47,6 +50,7 @@ func NewTripDetectionJob(
 		pub:      pub,
 		producer: producer,
 		cfg:      cfg,
+		noise:    noise.NewPipeline(noiseCfg, nil),
 	}
 }
 
@@ -79,8 +83,8 @@ func (j *TripDetectionJob) processPair(ctx context.Context, userID, deviceID uui
 
 	to := now.Add(-time.Duration(state.LateArrivalWindowSec) * time.Second)
 	var from time.Time
-	if state.LastWatermarkAt != nil {
-		from = *state.LastWatermarkAt
+	if state.LastProcessedAt != nil {
+		from = state.LastProcessedAt.Add(-time.Duration(state.LateArrivalWindowSec) * time.Second)
 	} else {
 		from = to.Add(-maxLookback)
 	}
@@ -89,14 +93,20 @@ func (j *TripDetectionJob) processPair(ctx context.Context, userID, deviceID uui
 		return nil
 	}
 
-	points, err := j.repo.FetchPoints(ctx, userID, deviceID, from, to)
+	points, err := j.repo.FetchUnprocessedPoints(ctx, userID, deviceID, from, to)
 	if err != nil {
 		return err
 	}
 
-	result := j.uc.ProcessBatch(state, points, now)
+	history, err := j.repo.FetchProcessedHistory(ctx, userID, deviceID, to, 100)
+	if err != nil {
+		return err
+	}
+	noiseResult := j.noise.ProcessBatch(history, points, state.LastProcessedAt, now)
+	result := j.uc.ProcessBatch(state, noiseResult.Accepted, now)
 
 	batch := buildBatch(result)
+	batch.ProcessedPoints = noiseResult.Processed
 	if err := j.repo.ApplyBatch(ctx, batch); err != nil {
 		return err
 	}

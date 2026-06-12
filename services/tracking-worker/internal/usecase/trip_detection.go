@@ -1,325 +1,246 @@
 package usecase
 
 import (
-	"math"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/wrany/tracking-worker/internal/domain"
+	"github.com/wrany/tracking-worker/internal/usecase/noise"
 )
 
-// CommandKind identifies what persistence action the job must perform.
 type CommandKind int8
 
 const (
-	// CmdCreateTrip: INSERT a new trip and link Points to it.
 	CmdCreateTrip CommandKind = iota
-	// CmdUpdateTrip: add Points and apply delta stats to an existing trip.
 	CmdUpdateTrip
-	// CmdCompleteTrip: mark a trip as TRIP_COMPLETED with end position.
 	CmdCompleteTrip
 )
 
-// TripCommand is a persistence instruction produced by ProcessBatch.
-// Commands must be applied in slice order within a single DB transaction.
 type TripCommand struct {
 	Kind   CommandKind
 	TripID uuid.UUID
+	Trip   *domain.Trip
 
-	// CmdCreateTrip: the initial trip row to INSERT.
-	Trip *domain.Trip
-
-	// CmdCreateTrip: if the candidate window opened before the current batch, the job must
-	// also fetch raw_location_points with recorded_at in [BackfillSince, Points[0].RecordedAt)
-	// and insert them into trip_points (ON CONFLICT DO NOTHING for idempotency).
 	BackfillSince *time.Time
 
-	// CmdUpdateTrip / CmdCompleteTrip: incremental stats to add to the trip row.
 	DeltaDistanceM   float64
 	DeltaPointsCount int
-	// LastPointAt and LastPointLat/Lon update the effective trip end position.
-	// The job sets: duration_sec = EXTRACT(EPOCH FROM last_point_at - started_at).
-	LastPointAt  *time.Time
-	LastPointLat *float64
-	LastPointLon *float64
+	LastPointAt      *time.Time
+	LastPointLat     *float64
+	LastPointLon     *float64
 
-	// CmdCompleteTrip: final end fields.
 	EndedAt *time.Time
 	EndLat  *float64
 	EndLon  *float64
-
-	// Points to INSERT into trip_points (applies to all command kinds).
-	Points []domain.TripPoint
+	Points  []domain.TripPoint
 }
 
-// ProcessBatchResult is the output of a single ProcessBatch call.
 type ProcessBatchResult struct {
 	NewState domain.TripDetectionState
-	// Commands must be applied in order by the caller.
 	Commands []TripCommand
 }
 
-// TripDetectionUseCase implements pure state-machine logic for trip detection.
-// It performs no I/O — all persistence is delegated to the caller via Commands.
 type TripDetectionUseCase struct {
-	cfg domain.TripDetectionConfig
+	cfg      domain.TripDetectionConfig
+	movement noise.MovementWindowAnalyzer
 }
 
-// NewTripDetectionUseCase creates a use case with the given detection thresholds.
 func NewTripDetectionUseCase(cfg domain.TripDetectionConfig) *TripDetectionUseCase {
-	return &TripDetectionUseCase{cfg: cfg}
+	noiseCfg := domain.DefaultNoiseConfig()
+	noiseCfg.GoodAccuracyM = 30
+	noiseCfg.MovementMinSpeedMps = cfg.MovementMinSpeedMps
+	noiseCfg.RunningMaxSpeedMps = cfg.MovementMaxSpeedMps
+	noiseCfg.MovementGoodPoints = cfg.MotionMinGoodPoints
+	noiseCfg.ActivityConfidence = cfg.ActivityConfidence
+	return &TripDetectionUseCase{
+		cfg:      cfg,
+		movement: noise.WindowMovementAnalyzer{Config: noiseCfg},
+	}
 }
 
-// ProcessBatch advances the state machine for one (user_id, device_id) pair.
-// points must be ordered by recorded_at ASC and belong to a single user+device.
-// now is the current wall-clock time used to advance the watermark.
 func (u *TripDetectionUseCase) ProcessBatch(
 	state domain.TripDetectionState,
-	points []domain.RawLocationPoint,
+	points []domain.ProcessedLocationPoint,
 	now time.Time,
 ) ProcessBatchResult {
 	result := ProcessBatchResult{NewState: state}
-
-	// candidatePoints: accumulated during MOTION_CANDIDATE in this batch.
+	var candidateWindow []domain.ProcessedLocationPoint
 	var candidatePoints []domain.TripPoint
+	var activePoints []domain.TripPoint
+	var activeDistance float64
+	var lastActive *domain.ProcessedLocationPoint
 
-	// activeTripPoints / activeTripDeltaDistM: accumulated during TRIP_ACTIVE in this batch.
-	var activeTripPoints []domain.TripPoint
-	var activeTripDeltaDistM float64
-	// lastActivePoint: the last MOVING raw point seen in TRIP_ACTIVE (for end-position tracking).
-	var lastActivePoint *domain.RawLocationPoint
-
-	// flushActive emits a CmdUpdateTrip for all active-trip data accumulated so far.
-	// Called before any state transition that leaves TRIP_ACTIVE.
 	flushActive := func() {
-		if len(activeTripPoints) == 0 {
+		if len(activePoints) == 0 {
 			return
 		}
-		cmd := TripCommand{
-			Kind:             CmdUpdateTrip,
-			TripID:           *result.NewState.ActiveTripID,
-			DeltaDistanceM:   activeTripDeltaDistM,
-			DeltaPointsCount: len(activeTripPoints),
-			Points:           append([]domain.TripPoint(nil), activeTripPoints...),
+		command := TripCommand{
+			Kind: CmdUpdateTrip, TripID: *result.NewState.ActiveTripID,
+			DeltaDistanceM: activeDistance, DeltaPointsCount: len(activePoints),
+			Points: append([]domain.TripPoint(nil), activePoints...),
 		}
-		if lastActivePoint != nil {
-			t := lastActivePoint.RecordedAt
-			cmd.LastPointAt = &t
-			cmd.LastPointLat = &lastActivePoint.Lat
-			cmd.LastPointLon = &lastActivePoint.Lon
+		if lastActive != nil {
+			lat, lon, _ := lastActive.Coordinates()
+			at := lastActive.RecordedAt
+			command.LastPointAt = &at
+			command.LastPointLat = &lat
+			command.LastPointLon = &lon
 		}
-		result.Commands = append(result.Commands, cmd)
-		activeTripPoints = activeTripPoints[:0]
-		activeTripDeltaDistM = 0
-		lastActivePoint = nil
+		result.Commands = append(result.Commands, command)
+		activePoints = nil
+		activeDistance = 0
+		lastActive = nil
 	}
 
 	for i := range points {
-		pt := &points[i]
-
-		// --- Noise filtering ---
-
-		if pt.AccuracyM > u.cfg.MaxAccuracyM {
+		point := &points[i]
+		if !point.IsAccepted {
 			continue
 		}
-		if result.NewState.LastProcessedAt != nil && !pt.RecordedAt.After(*result.NewState.LastProcessedAt) {
-			continue // duplicate or out-of-order past the processed mark
+		lat, lon, ok := point.Coordinates()
+		if !ok {
+			continue
 		}
-
-		// Compute distance and calculated speed from the previous accepted point.
-		var distFromPrev float64
-		var calcSpeedMps float64
-		hasPrev := result.NewState.LastPointLat != nil && result.NewState.LastPointLon != nil
-		if hasPrev {
-			distFromPrev = haversineM(*result.NewState.LastPointLat, *result.NewState.LastPointLon, pt.Lat, pt.Lon)
-			if result.NewState.LastProcessedAt != nil {
-				elapsed := pt.RecordedAt.Sub(*result.NewState.LastProcessedAt).Seconds()
-				if elapsed > 0 {
-					calcSpeedMps = distFromPrev / elapsed
-				}
-			}
-			if calcSpeedMps > u.cfg.MaxSpeedJumpMps {
-				continue // GPS jump — discard without updating last-point
-			}
-		}
-
-		// Effective speed: sensor value is authoritative when present (it knows the device is
-		// stationary even if GPS drift produces non-zero calculated speed). Fall back to
-		// calculated speed only when no sensor speed is available.
-		effectiveSpeed := calcSpeedMps
-		if pt.SpeedMps != nil {
-			effectiveSpeed = *pt.SpeedMps
-		}
-		const movingThresholdMps = 0.56 // ~2 km/h
-		isMoving := effectiveSpeed >= movingThresholdMps
-
 		tp := domain.TripPoint{
-			UserID:     pt.UserID,
-			DeviceID:   pt.DeviceID,
-			EventID:    pt.EventID,
-			RecordedAt: pt.RecordedAt,
+			UserID: point.UserID, DeviceID: point.DeviceID,
+			EventID: point.EventID, RecordedAt: point.RecordedAt,
 		}
-
-		// --- State machine ---
+		moving := point.IsMovementEvidence(
+			u.cfg.MovementMinSpeedMps,
+			u.cfg.MovementMaxSpeedMps,
+			u.cfg.ActivityConfidence,
+		)
 
 		switch result.NewState.State {
-
 		case domain.StateIdle:
-			if isMoving {
-				t := pt.RecordedAt
-				id := pt.EventID
+			if moving {
+				at, id := point.RecordedAt, point.EventID
 				result.NewState.State = domain.StateMotionCandidate
-				result.NewState.CandidateStartedAt = &t
+				result.NewState.CandidateStartedAt = &at
 				result.NewState.CandidateStartPointID = &id
+				result.NewState.CandidateStartLat = &lat
+				result.NewState.CandidateStartLon = &lon
 				result.NewState.CandidateDistanceM = 0
-				result.NewState.CandidateStartLat = &pt.Lat
-				result.NewState.CandidateStartLon = &pt.Lon
+				result.NewState.CandidateGoodPoints = 1
+				candidateWindow = append(candidateWindow, *point)
 				candidatePoints = append(candidatePoints, tp)
 			}
 
 		case domain.StateMotionCandidate:
-			if !isMoving {
-				// Motion broke — reset candidate.
-				result.NewState.State = domain.StateIdle
-				result.NewState.CandidateStartedAt = nil
-				result.NewState.CandidateStartPointID = nil
-				result.NewState.CandidateDistanceM = 0
-				result.NewState.CandidateStartLat = nil
-				result.NewState.CandidateStartLon = nil
-				candidatePoints = candidatePoints[:0]
+			if !moving {
+				resetCandidate(&result.NewState)
+				candidateWindow = nil
+				candidatePoints = nil
 				break
 			}
-			result.NewState.CandidateDistanceM += distFromPrev
+			result.NewState.CandidateDistanceM += point.DistanceDeltaM
+			result.NewState.CandidateGoodPoints++
+			candidateWindow = append(candidateWindow, *point)
 			candidatePoints = append(candidatePoints, tp)
 
-			duration := pt.RecordedAt.Sub(*result.NewState.CandidateStartedAt)
-			if int(duration.Seconds()) >= u.cfg.MotionMinDurationSec &&
-				result.NewState.CandidateDistanceM >= u.cfg.MotionMinDistanceM {
-				// Thresholds met: create the trip.
+			duration := point.RecordedAt.Sub(*result.NewState.CandidateStartedAt)
+			enoughWindow := u.movement.Analyze(candidateWindow) ||
+				result.NewState.CandidateGoodPoints >= u.cfg.MotionMinGoodPoints
+			if duration >= time.Duration(u.cfg.MotionMinDurationSec)*time.Second &&
+				result.NewState.CandidateDistanceM >= u.cfg.MotionMinDistanceM &&
+				enoughWindow {
 				tripID := uuid.New()
-				startLat := *result.NewState.CandidateStartLat
-				startLon := *result.NewState.CandidateStartLon
-				backfillTime := *result.NewState.CandidateStartedAt
-				trip := domain.Trip{
-					ID:          tripID,
-					UserID:      pt.UserID,
-					DeviceID:    pt.DeviceID,
-					Status:      domain.TripStatusActive,
-					StartedAt:   backfillTime,
-					StartLat:    startLat,
-					StartLon:    startLon,
+				startedAt := *result.NewState.CandidateStartedAt
+				trip := &domain.Trip{
+					ID: tripID, UserID: point.UserID, DeviceID: point.DeviceID,
+					Status: domain.TripStatusActive, StartedAt: startedAt,
+					StartLat:    *result.NewState.CandidateStartLat,
+					StartLon:    *result.NewState.CandidateStartLon,
 					DistanceM:   result.NewState.CandidateDistanceM,
 					DurationSec: int64(duration.Seconds()),
-					PointsCount: len(candidatePoints),
-					CreatedAt:   now,
-					UpdatedAt:   now,
+					PointsCount: result.NewState.CandidateGoodPoints,
+					CreatedAt:   now, UpdatedAt: now,
 				}
-				// Stamp TripID on all candidate points from this batch.
-				batchCandidates := make([]domain.TripPoint, len(candidatePoints))
-				for j, cp := range candidatePoints {
-					cp.TripID = tripID
-					batchCandidates[j] = cp
+				for index := range candidatePoints {
+					candidatePoints[index].TripID = tripID
 				}
 				result.Commands = append(result.Commands, TripCommand{
-					Kind:          CmdCreateTrip,
-					TripID:        tripID,
-					Trip:          &trip,
-					BackfillSince: &backfillTime,
-					Points:        batchCandidates,
+					Kind: CmdCreateTrip, TripID: tripID, Trip: trip,
+					BackfillSince: &startedAt, Points: candidatePoints,
 				})
 				result.NewState.State = domain.StateTripActive
 				result.NewState.ActiveTripID = &tripID
-				result.NewState.CandidateStartedAt = nil
-				result.NewState.CandidateStartPointID = nil
-				result.NewState.CandidateDistanceM = 0
-				result.NewState.CandidateStartLat = nil
-				result.NewState.CandidateStartLon = nil
-				candidatePoints = candidatePoints[:0]
-				// The current point is already in batchCandidates — do not add to activeTripPoints.
+				resetCandidate(&result.NewState)
+				candidateWindow = nil
+				candidatePoints = nil
 			}
 
 		case domain.StateTripActive:
-			if !isMoving {
+			if point.IsStationary {
 				flushActive()
-				t := pt.RecordedAt
+				at := point.RecordedAt
+				if point.StationarySince != nil {
+					at = *point.StationarySince
+				}
 				result.NewState.State = domain.StateStopCandidate
-				result.NewState.StopStartedAt = &t
-				result.NewState.StopCenterLat = &pt.Lat
-				result.NewState.StopCenterLon = &pt.Lon
+				result.NewState.StopStartedAt = &at
+				result.NewState.StopCenterLat = &lat
+				result.NewState.StopCenterLon = &lon
 			} else {
 				tp.TripID = *result.NewState.ActiveTripID
-				activeTripPoints = append(activeTripPoints, tp)
-				activeTripDeltaDistM += distFromPrev
-				lastActivePoint = pt
+				activePoints = append(activePoints, tp)
+				activeDistance += point.DistanceDeltaM
+				lastActive = point
 			}
 
 		case domain.StateStopCandidate:
-			distFromCenter := haversineM(
+			distanceFromCenter := noise.HaversineM(
 				*result.NewState.StopCenterLat, *result.NewState.StopCenterLon,
-				pt.Lat, pt.Lon,
+				lat, lon,
 			)
-			if distFromCenter > u.cfg.StopRadiusM {
-				// Moved out of stop zone: resume trip.
+			if !point.IsStationary && distanceFromCenter > u.cfg.StopRadiusM {
 				result.NewState.State = domain.StateTripActive
 				result.NewState.StopStartedAt = nil
 				result.NewState.StopCenterLat = nil
 				result.NewState.StopCenterLon = nil
 				tp.TripID = *result.NewState.ActiveTripID
-				activeTripPoints = append(activeTripPoints, tp)
-				activeTripDeltaDistM += distFromPrev
-				lastActivePoint = pt
-			} else {
-				stopDuration := pt.RecordedAt.Sub(*result.NewState.StopStartedAt)
-				if int(stopDuration.Seconds()) >= u.cfg.StopMinDurationSec {
-					// Long stop confirmed: complete the trip at stop_started_at.
-					tripID := *result.NewState.ActiveTripID
-					endedAt := *result.NewState.StopStartedAt
-					endLat := *result.NewState.StopCenterLat
-					endLon := *result.NewState.StopCenterLon
-					result.Commands = append(result.Commands, TripCommand{
-						Kind:    CmdCompleteTrip,
-						TripID:  tripID,
-						EndedAt: &endedAt,
-						EndLat:  &endLat,
-						EndLon:  &endLon,
-					})
-					result.NewState.State = domain.StateIdle
-					result.NewState.ActiveTripID = nil
-					result.NewState.StopStartedAt = nil
-					result.NewState.StopCenterLat = nil
-					result.NewState.StopCenterLon = nil
-				}
-				// else: stay in STOP_CANDIDATE
+				activePoints = append(activePoints, tp)
+				activeDistance += point.DistanceDeltaM
+				lastActive = point
+			} else if point.RecordedAt.Sub(*result.NewState.StopStartedAt) >= time.Duration(u.cfg.StopMinDurationSec)*time.Second {
+				tripID := *result.NewState.ActiveTripID
+				endedAt := *result.NewState.StopStartedAt
+				endLat, endLon := *result.NewState.StopCenterLat, *result.NewState.StopCenterLon
+				result.Commands = append(result.Commands, TripCommand{
+					Kind: CmdCompleteTrip, TripID: tripID,
+					EndedAt: &endedAt, EndLat: &endLat, EndLon: &endLon,
+				})
+				result.NewState.State = domain.StateIdle
+				result.NewState.ActiveTripID = nil
+				result.NewState.StopStartedAt = nil
+				result.NewState.StopCenterLat = nil
+				result.NewState.StopCenterLon = nil
 			}
 		}
 
-		// Update last accepted point.
-		t := pt.RecordedAt
-		result.NewState.LastProcessedAt = &t
-		result.NewState.LastPointLat = &pt.Lat
-		result.NewState.LastPointLon = &pt.Lon
+		at := point.RecordedAt
+		result.NewState.LastProcessedAt = &at
+		result.NewState.LastPointLat = &lat
+		result.NewState.LastPointLon = &lon
 	}
 
-	// Flush any remaining active-trip accumulation at end of batch.
 	if result.NewState.State == domain.StateTripActive {
 		flushActive()
 	}
-
-	// Advance watermark: never move past now()-window so late-arriving points are still caught.
-	newWatermark := now.Add(-time.Duration(result.NewState.LateArrivalWindowSec) * time.Second)
-	result.NewState.LastWatermarkAt = &newWatermark
+	watermark := now.Add(-time.Duration(result.NewState.LateArrivalWindowSec) * time.Second)
+	result.NewState.LastWatermarkAt = &watermark
 	result.NewState.UpdatedAt = now
-
 	return result
 }
 
-// haversineM returns the great-circle distance in metres between two WGS-84 points.
-func haversineM(lat1, lon1, lat2, lon2 float64) float64 {
-	const earthR = 6_371_000.0
-	φ1 := lat1 * math.Pi / 180
-	φ2 := lat2 * math.Pi / 180
-	Δφ := (lat2 - lat1) * math.Pi / 180
-	Δλ := (lon2 - lon1) * math.Pi / 180
-	a := math.Sin(Δφ/2)*math.Sin(Δφ/2) + math.Cos(φ1)*math.Cos(φ2)*math.Sin(Δλ/2)*math.Sin(Δλ/2)
-	return earthR * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+func resetCandidate(state *domain.TripDetectionState) {
+	state.CandidateStartedAt = nil
+	state.CandidateStartPointID = nil
+	state.CandidateDistanceM = 0
+	state.CandidateStartLat = nil
+	state.CandidateStartLon = nil
+	state.CandidateGoodPoints = 0
+	if state.State == domain.StateMotionCandidate {
+		state.State = domain.StateIdle
+	}
 }

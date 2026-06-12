@@ -21,15 +21,15 @@ import (
 
 // App wires all components and manages the service lifecycle.
 type App struct {
-	httpSrv            *http.Server
-	locationConsumer   *natstransport.LocationConsumer
-	tripDetectionJob   *usecase.TripDetectionJob
-	tripDetectionIvl   time.Duration
-	routeMatchingJob   *usecase.RouteMatchingJob
-	routeMatchingIvl   time.Duration
-	bus                *eventbusnats.Bus
-	db                 *pgxpool.Pool
-	metrics            *observ.WorkerMetrics
+	httpSrv          *http.Server
+	locationConsumer *natstransport.LocationConsumer
+	tripDetectionJob *usecase.TripDetectionJob
+	tripDetectionIvl time.Duration
+	routeMatchingJob *usecase.RouteMatchingJob
+	routeMatchingIvl time.Duration
+	bus              *eventbusnats.Bus
+	db               *pgxpool.Pool
+	metrics          *observ.WorkerMetrics
 }
 
 // New builds the App from config: connects to Postgres and NATS,
@@ -87,7 +87,39 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	locationConsumer := natstransport.NewLocationConsumer(consumer, processor)
 
 	tripRepo := postgres.NewTripRepo(db)
-	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", domain.DefaultTripDetectionConfig())
+	noiseCfg := domain.NoiseConfig{
+		GoodAccuracyM:            cfg.GPSGoodAccuracyM,
+		UsableAccuracyM:          cfg.GPSUsableAccuracyM,
+		GarbageAccuracyM:         cfg.GPSGarbageAccuracyM,
+		WalkingMaxSpeedMps:       cfg.GPSWalkingMaxSpeedMps,
+		RunningMaxSpeedMps:       cfg.GPSRunningMaxSpeedMps,
+		BikeMaxSpeedMps:          cfg.GPSBikeMaxSpeedMps,
+		VehicleMaxSpeedMps:       cfg.GPSVehicleMaxSpeedMps,
+		NoiseMinRadiusM:          cfg.GPSNoiseMinRadiusM,
+		NoiseMaxRadiusM:          cfg.GPSNoiseMaxRadiusM,
+		SmoothingPoints:          cfg.GPSSmoothingPoints,
+		StationaryWindowSec:      cfg.GPSStationaryWindowSec,
+		StationaryMinDurationSec: cfg.GPSStationaryMinDurationSec,
+		StationaryRadiusM:        cfg.GPSStationaryRadiusM,
+		StationaryMaxSpeedMps:    cfg.GPSStationaryMaxSpeedMps,
+		StationaryMinPoints:      cfg.GPSStationaryMinPoints,
+		MovementMinSpeedMps:      cfg.GPSMovementMinSpeedMps,
+		MovementGoodPoints:       cfg.GPSMovementGoodPoints,
+		ActivityConfidence:       cfg.GPSActivityConfidence,
+		LateArrivalWindowSec:     cfg.GPSLateArrivalWindowSec,
+	}
+	tripCfg := domain.TripDetectionConfig{
+		MotionMinDurationSec: cfg.GPSMovementMinDurationSec,
+		MotionMinDistanceM:   cfg.GPSMovementMinDistanceM,
+		MotionMinGoodPoints:  cfg.GPSMovementGoodPoints,
+		MovementMinSpeedMps:  cfg.GPSMovementMinSpeedMps,
+		MovementMaxSpeedMps:  cfg.GPSRunningMaxSpeedMps,
+		ActivityConfidence:   cfg.GPSActivityConfidence,
+		StopMinDurationSec:   cfg.TripStopMinDurationSec,
+		StopRadiusM:          cfg.GPSStationaryRadiusM,
+		LateArrivalWindowSec: cfg.GPSLateArrivalWindowSec,
+	}
+	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", tripCfg, noiseCfg)
 
 	routeRepo := postgres.NewRouteRepo(db)
 	routeJob := usecase.NewRouteMatchingJob(routeRepo, bus, "tracking-worker", domain.DefaultRouteMatchConfig())

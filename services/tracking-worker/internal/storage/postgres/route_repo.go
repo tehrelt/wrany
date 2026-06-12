@@ -63,12 +63,12 @@ func (r *RouteRepo) FindUnmatchedTrips(ctx context.Context, minPoints, limit int
 
 func (r *RouteRepo) FindTripPointsWithCoords(ctx context.Context, tripID uuid.UUID) ([]domain.GeoPoint, error) {
 	const q = `
-		SELECT rlp.lat, rlp.lon
+		SELECT plp.filtered_lat, plp.filtered_lon
 		FROM trip_points tp
-		JOIN raw_location_points rlp
-		  ON rlp.event_id  = tp.event_id
-		 AND rlp.user_id   = tp.user_id
-		 AND rlp.device_id = tp.device_id
+		JOIN processed_location_points plp
+		  ON plp.event_id  = tp.event_id
+		 AND plp.user_id   = tp.user_id
+		 AND plp.device_id = tp.device_id
 		WHERE tp.trip_id = $1
 		ORDER BY tp.recorded_at ASC, tp.event_id ASC`
 

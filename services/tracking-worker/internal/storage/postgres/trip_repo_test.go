@@ -114,7 +114,7 @@ func TestLoadState_DefaultWhenMissing(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, domain.StateIdle, state.State)
-	assert.Equal(t, 300, state.LateArrivalWindowSec)
+	assert.Equal(t, 45, state.LateArrivalWindowSec)
 	assert.Equal(t, userID, state.UserID)
 	assert.Equal(t, deviceID, state.DeviceID)
 	assert.Nil(t, state.ActiveTripID)
@@ -463,4 +463,48 @@ func TestApplyBatch_UpsertDetectionState(t *testing.T) {
 	assert.Equal(t, domain.StateMotionCandidate, loaded.State)
 	require.NotNil(t, loaded.LastWatermarkAt)
 	assert.WithinDuration(t, wm, *loaded.LastWatermarkAt, time.Second)
+}
+
+func TestApplyBatch_StoresProcessedPoint(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	rawRepo := postgres.NewRawLocationRepo(db)
+	tripRepo := postgres.NewTripRepo(db)
+	ctx := context.Background()
+	userID, deviceID := newPair()
+	recordedAt := now().Add(-time.Minute)
+	raw := makeRawPoint(userID, deviceID, recordedAt, 1.2)
+	require.NoError(t, rawRepo.Insert(ctx, raw))
+
+	filteredLat := raw.Lat + 0.00001
+	filteredLon := raw.Lon + 0.00001
+	processed := domain.ProcessedLocationPoint{
+		UserID: userID, DeviceID: deviceID, EventID: raw.EventID,
+		RawLat: raw.Lat, RawLon: raw.Lon,
+		FilteredLat: &filteredLat, FilteredLon: &filteredLon,
+		AccuracyM: raw.AccuracyM, SpeedMps: raw.SpeedMps,
+		ImpliedSpeedMps: 1.1, DistanceDeltaM: 12,
+		IsAccepted: true, RecordedAt: raw.RecordedAt,
+		ReceivedAt: raw.ReceivedAt, ProcessedAt: now(),
+	}
+	state := domain.TripDetectionState{
+		UserID: userID, DeviceID: deviceID,
+		State: domain.StateIdle, LateArrivalWindowSec: 45, UpdatedAt: now(),
+	}
+
+	require.NoError(t, tripRepo.ApplyBatch(ctx, domain.TripDetectionBatch{
+		NewState: state, ProcessedPoints: []domain.ProcessedLocationPoint{processed},
+	}))
+
+	var accepted bool
+	var storedLat float64
+	require.NoError(t, db.QueryRow(ctx, `
+		SELECT is_accepted, filtered_lat
+		FROM processed_location_points
+		WHERE user_id = $1 AND device_id = $2 AND event_id = $3`,
+		userID, deviceID, raw.EventID,
+	).Scan(&accepted, &storedLat))
+	assert.True(t, accepted)
+	assert.InDelta(t, filteredLat, storedLat, 0.000001)
 }

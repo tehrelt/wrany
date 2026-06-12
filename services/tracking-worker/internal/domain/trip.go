@@ -71,6 +71,7 @@ type TripDetectionState struct {
 	CandidateDistanceM    float64  // cumulative distance since candidate start
 	CandidateStartLat     *float64 // geographic start of the candidate (= trip start)
 	CandidateStartLon     *float64
+	CandidateGoodPoints   int
 
 	// STOP_CANDIDATE phase: opened when the device appears to have halted.
 	StopStartedAt *time.Time
@@ -95,11 +96,13 @@ type TripDetectionState struct {
 type TripDetectionConfig struct {
 	MotionMinDurationSec int     // sustained motion duration to confirm a trip (default 45)
 	MotionMinDistanceM   float64 // minimum distance to confirm a trip (default 60)
-	MaxAccuracyM         float64 // maximum GPS accuracy radius to accept a point (default 50)
+	MotionMinGoodPoints  int
+	MovementMinSpeedMps  float64
+	MovementMaxSpeedMps  float64
+	ActivityConfidence   float64
 	StopMinDurationSec   int     // minimum stop duration to end a trip (default 180)
 	StopRadiusM          float64 // stop-zone radius in metres (default 40)
-	MaxSpeedJumpMps      float64 // above this speed a point is a GPS jump (default 83.3 ≈ 300 km/h)
-	LateArrivalWindowSec int     // seconds to keep behind now() for the watermark (default 300)
+	LateArrivalWindowSec int
 }
 
 // DefaultTripDetectionConfig returns production-ready defaults.
@@ -107,11 +110,13 @@ func DefaultTripDetectionConfig() TripDetectionConfig {
 	return TripDetectionConfig{
 		MotionMinDurationSec: 45,
 		MotionMinDistanceM:   60,
-		MaxAccuracyM:         50,
+		MotionMinGoodPoints:  3,
+		MovementMinSpeedMps:  0.6,
+		MovementMaxSpeedMps:  7,
+		ActivityConfidence:   0.6,
 		StopMinDurationSec:   180,
 		StopRadiusM:          40,
-		MaxSpeedJumpMps:      83.3,
-		LateArrivalWindowSec: 300,
+		LateArrivalWindowSec: 45,
 	}
 }
 
@@ -142,7 +147,8 @@ type TripCompletion struct {
 // TripDetectionBatch describes all persistence operations for one detection cycle.
 // Applied atomically by the repository inside a single transaction.
 type TripDetectionBatch struct {
-	NewState TripDetectionState
+	NewState        TripDetectionState
+	ProcessedPoints []ProcessedLocationPoint
 
 	// Trips to INSERT.
 	NewTrips []*Trip
