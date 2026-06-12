@@ -10,12 +10,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/features/auth/useAuth'
 import {
   listRoutes,
-  getRouteTrips,
   getRoutePoints,
+  getRouteResults,
+  getRouteAttempts,
   formatDistance,
   formatDuration,
   type Route,
   type RoutePoint,
+  type RouteResultResponse,
+  type TripAttemptItem,
 } from '@/features/routes/routesApi'
 import { MAP_STYLE_URL } from '@/config/env'
 
@@ -118,6 +121,97 @@ function RouteCard({
   )
 }
 
+function formatSpeed(mps: number | undefined): string {
+  if (!mps) return '—'
+  return `${(mps * 3.6).toFixed(1)} km/h`
+}
+
+function TripResultCard({ label, trip }: { label: string; trip: { trip_id?: string; started_at?: string; duration_sec?: number; distance_m?: number; avg_speed_mps?: number } }) {
+  const date = trip.started_at ? new Date(trip.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'
+  return (
+    <div className="rounded-lg border p-2 flex-1 text-xs">
+      <div className="text-muted-foreground font-medium mb-1">{label}</div>
+      <div className="font-semibold text-sm">{formatDuration(trip.duration_sec ?? 0)}</div>
+      <div className="text-muted-foreground">{date} · {formatDistance(trip.distance_m ?? 0)} · {formatSpeed(trip.avg_speed_mps)}</div>
+    </div>
+  )
+}
+
+function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
+  const { best, latest, comparison, attempts_count } = result
+
+  if (!attempts_count) {
+    return <p className="text-xs text-muted-foreground">No completed attempts yet.</p>
+  }
+
+  const isPersonalRecord = comparison?.latest_vs_best_sec === 0
+  const diff = comparison?.latest_vs_best_sec ?? 0
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        {best && <TripResultCard label="Best" trip={best} />}
+        {latest && <TripResultCard label="Latest" trip={latest} />}
+        <div className="rounded-lg border p-2 text-xs flex flex-col justify-center items-center gap-1 min-w-[80px]">
+          <div className="text-muted-foreground font-medium">vs Best</div>
+          {isPersonalRecord ? (
+            <Badge variant="default" className="text-xs">Personal Record</Badge>
+          ) : (
+            <span className={diff > 0 ? 'text-orange-500 font-semibold' : 'text-green-600 font-semibold'}>
+              {diff > 0 ? `+${diff}s` : `${diff}s`}
+            </span>
+          )}
+          <div className="text-muted-foreground">{attempts_count} attempt{attempts_count !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
+  if (attempts.length === 0) {
+    return <p className="text-xs text-muted-foreground">No attempts yet.</p>
+  }
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="text-muted-foreground border-b">
+          <th className="text-left pb-1 pr-3 font-medium">Date</th>
+          <th className="text-right pb-1 pr-3 font-medium">Distance</th>
+          <th className="text-right pb-1 pr-3 font-medium">Duration</th>
+          <th className="text-right pb-1 pr-3 font-medium">Speed</th>
+          <th className="text-right pb-1 font-medium">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {attempts.map(a => {
+          const date = a.started_at
+            ? new Date(a.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '—'
+          return (
+            <tr
+              key={a.trip_id}
+              className={[
+                'border-b last:border-0 hover:bg-accent/50',
+                a.is_best ? 'bg-yellow-50 dark:bg-yellow-950/20' : '',
+              ].join(' ')}
+            >
+              <td className="py-1 pr-3 text-muted-foreground">
+                {a.is_best && <span className="text-yellow-600 mr-1">★</span>}
+                {date}
+              </td>
+              <td className="py-1 pr-3 text-right">{formatDistance(a.distance_m ?? 0)}</td>
+              <td className="py-1 pr-3 text-right font-medium">{formatDuration(a.duration_sec ?? 0)}</td>
+              <td className="py-1 pr-3 text-right">{formatSpeed(a.avg_speed_mps)}</td>
+              <td className="py-1 text-right">{((a.match_score ?? 0) * 100).toFixed(0)}%</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
 export function RoutesPage({ onLogout }: Props) {
   const { token } = useAuth()
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
@@ -127,9 +221,15 @@ export function RoutesPage({ onLogout }: Props) {
     queryFn: () => listRoutes({ limit: 50 }),
   })
 
-  const tripsQuery = useQuery({
-    queryKey: ['route-trips', selectedRoute?.id],
-    queryFn: () => getRouteTrips(selectedRoute!.id, { limit: 50 }),
+  const resultsQuery = useQuery({
+    queryKey: ['route-results', selectedRoute?.id],
+    queryFn: () => getRouteResults(selectedRoute!.id),
+    enabled: !!selectedRoute,
+  })
+
+  const attemptsQuery = useQuery({
+    queryKey: ['route-attempts', selectedRoute?.id],
+    queryFn: () => getRouteAttempts(selectedRoute!.id, { limit: 50 }),
     enabled: !!selectedRoute,
   })
 
@@ -210,56 +310,30 @@ export function RoutesPage({ onLogout }: Props) {
           </Map>
         </div>
 
-        {/* Trips table */}
+        {/* Personal Records + Attempts */}
         {selectedRoute && (
-          <div className="h-56 border-t overflow-y-auto shrink-0">
-            <div className="p-3">
-              <h3 className="text-sm font-semibold mb-2">
-                Trips — {selectedRoute.name ?? `Route ${selectedRoute.id.slice(0, 8)}`}
+          <div className="border-t shrink-0 overflow-y-auto" style={{ maxHeight: '320px' }}>
+            <div className="p-3 space-y-3">
+              <h3 className="text-sm font-semibold">
+                {selectedRoute.name ?? `Route ${selectedRoute.id.slice(0, 8)}`}
               </h3>
 
-              {tripsQuery.isLoading && <Skeleton className="h-8 w-full" />}
+              {(resultsQuery.isLoading || attemptsQuery.isLoading) && (
+                <Skeleton className="h-16 w-full" />
+              )}
 
-              {tripsQuery.isError && (
+              {(resultsQuery.isError || attemptsQuery.isError) && (
                 <Alert variant="destructive">
-                  <AlertDescription>Failed to load trips.</AlertDescription>
+                  <AlertDescription>Failed to load results.</AlertDescription>
                 </Alert>
               )}
 
-              {tripsQuery.data && tripsQuery.data.items.length === 0 && (
-                <p className="text-xs text-muted-foreground">No trips yet.</p>
+              {resultsQuery.data && (
+                <PersonalRecordsSection result={resultsQuery.data} />
               )}
 
-              {tripsQuery.data && tripsQuery.data.items.length > 0 && (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-muted-foreground border-b">
-                      <th className="text-left pb-1 pr-3 font-medium">Date</th>
-                      <th className="text-right pb-1 pr-3 font-medium">Distance</th>
-                      <th className="text-right pb-1 pr-3 font-medium">Duration</th>
-                      <th className="text-right pb-1 font-medium">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tripsQuery.data.items.map(rt => {
-                      const date = new Date(rt.started_at)
-                      const dateStr = date.toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                      return (
-                        <tr key={rt.trip_id} className="border-b last:border-0 hover:bg-accent/50">
-                          <td className="py-1 pr-3 text-muted-foreground">{dateStr}</td>
-                          <td className="py-1 pr-3 text-right">{formatDistance(rt.distance_m)}</td>
-                          <td className="py-1 pr-3 text-right">{formatDuration(rt.duration_sec)}</td>
-                          <td className="py-1 text-right">{(rt.match_score * 100).toFixed(0)}%</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              {attemptsQuery.data && (
+                <AttemptsTable attempts={attemptsQuery.data.items} />
               )}
             </div>
           </div>
