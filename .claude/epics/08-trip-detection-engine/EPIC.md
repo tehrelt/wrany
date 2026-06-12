@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Implemented
 
 ---
 
@@ -421,8 +421,58 @@ TripDetectionUseCase → domain.Trip (no external deps)
 **Коммиты:**
 - `dd71a34` epic(08): add trip detection storage, job, and app wiring (Phase 3)
 
+### Phase 4: tracking-gateway query API (2026-06-12)
+
+**Созданы файлы (tracking-gateway):**
+- `internal/domain/trip.go` — Trip, TripPoint, TripFilter, TripPointFilter read-only types.
+- `internal/usecase/trip_query.go` — TripQueryUsecase: ListTrips (keyset пагинация DESC started_at), GetTrip (ownership check), GetTripPoints (keyset ASC recorded_at + JOIN raw_location_points).
+- `internal/storage/postgres/trip_query_repo.go` — запросы trips + trip_points, user_id isolation.
+- `internal/transport/http/trip_handler.go` — GET /v1/trips, /v1/trips/{id}, /v1/trips/{id}/points; swaggo annotations.
+- `internal/storage/postgres/trip_query_repo_test.go` — 8 integration-тестов: user isolation, status filter, пагинация, not-found, wrong user, GetTripPoints с JOIN.
+
+**Обновлены:**
+- `swagger_types.go` — TripItem, TripListResponse, TripPointItem, TripPointsResponse + envelopes.
+- `router.go` — 3 новых authenticated роута + поле Trips в RouterDeps.
+- `app/app.go` — wire TripQueryRepo + TripQueryUsecase.
+
+---
+
+### Phase 5: Web client Trips page (2026-06-12)
+
+**Созданы файлы:**
+- `apps/web/src/features/trips/tripsApi.ts` — listTrips, getTripPoints, formatDuration, formatDistance.
+- `apps/web/src/components/map/TripMap.tsx` — карта с полилинией (зелёная линия, старт/финиш dots), react-map-gl/maplibre.
+- `apps/web/src/pages/TripsPage.tsx` — список trips в sidebar с фильтром по статусу + TripMap + stats footer.
+
+**Обновлены:**
+- `app/App.tsx` — роут `/trips` за AuthGuard.
+- `AppLayout.tsx` — навигационные вкладки Points / Trips с active state (react-router-dom Link).
+
 ---
 
 ## Final Report
 
-_Заполнить после завершения._
+### Итог EPIC 08: Trip Detection Engine
+
+**Статус:** Implemented
+
+**Что реализовано:**
+
+| Компонент | Статус |
+|-----------|--------|
+| DB миграции (trips, trip_points, trip_detection_state) | ✅ |
+| Watermark-based checkpoint | ✅ |
+| State machine (IDLE→MOTION_CANDIDATE→TRIP_ACTIVE→STOP_CANDIDATE) | ✅ |
+| Persisted state (restart-safe) | ✅ |
+| tracking-worker: TripDetectionJob (periodic, 30s interval) | ✅ |
+| tracking-worker: NATS events (trip.started/updated/completed v1) | ✅ |
+| tracking-worker: integration tests (TripRepo) | ✅ |
+| tracking-worker: unit tests (state machine, 16 тестов) | ✅ |
+| tracking-gateway: REST API (GET /v1/trips, /id, /id/points) | ✅ |
+| tracking-gateway: integration tests (TripQueryRepo) | ✅ |
+| Web client: Trips page + TripMap polyline | ✅ |
+| Web client: nav tabs Points / Trips | ✅ |
+
+**Тесты:** `go test ./internal/usecase/...` PASS на обоих сервисах. TypeScript build чистый.
+
+**Out of scope (следующие epics):** Loop route detection (EPIC 09), route matching (EPIC 10), best lap (EPIC 11).
