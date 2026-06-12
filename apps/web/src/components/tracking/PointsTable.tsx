@@ -74,7 +74,7 @@ export function PointsTable({ points, loading, selectedId, onSelect, onDelete }:
       header: 'Speed',
       cell: ({ getValue }) => {
         const v = getValue<number | null>()
-        return v != null ? `${v.toFixed(2)}` : '—'
+        return v != null ? `${(v * 3.6).toFixed(1)} km/h` : '—'
       },
     },
     {
@@ -99,7 +99,7 @@ export function PointsTable({ points, loading, selectedId, onSelect, onDelete }:
               onClick={() => onSelect?.(id)}
             >
               <MapPin className="w-3 h-3" />
-              на карте
+              Show on map
             </Button>
             {onDelete && (
               <Button

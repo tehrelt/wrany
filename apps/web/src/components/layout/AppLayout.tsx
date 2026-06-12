@@ -29,7 +29,7 @@ export function AppLayout({ userEmail, onLogout, sidebar, children }: AppLayoutP
                 className="gap-1.5 h-8"
               >
                 <Activity className="h-4 w-4" />
-                <span className="hidden sm:inline">Points</span>
+                <span className="hidden sm:inline">Tracking</span>
               </Button>
             </Link>
             <Link to="/trips">

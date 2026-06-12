@@ -45,9 +45,9 @@ function TripCard({
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-muted-foreground">{dateStr} · {timeStr}</span>
-        <Badge variant={isActive ? 'default' : 'secondary'} className="text-xs">
-          {isActive ? 'Active' : 'Done'}
-        </Badge>
+        {isActive && (
+          <Badge variant="default" className="text-xs">Active</Badge>
+        )}
       </div>
       <div className="flex gap-4 text-sm font-medium">
         <span>{formatDistance(trip.distance_m)}</span>
@@ -109,8 +109,19 @@ export function TripsPage({ onLogout }: Props) {
         </div>
       )}
 
-      {!tripsQuery.isLoading && trips.length === 0 && (
-        <p className="text-xs text-muted-foreground text-center py-8">No trips found</p>
+      {tripsQuery.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>Could not load trips. Try again.</AlertDescription>
+        </Alert>
+      )}
+
+      {!tripsQuery.isLoading && !tripsQuery.isError && trips.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-10 px-2 text-center">
+          <p className="text-sm font-medium text-muted-foreground">No trips detected yet</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            The tracker automatically detects trips when you move. Start tracking to see results here.
+          </p>
+        </div>
       )}
 
       <div className="flex flex-col gap-2 overflow-y-auto flex-1 min-h-0">
@@ -139,12 +150,6 @@ export function TripsPage({ onLogout }: Props) {
 
   return (
     <AppLayout userEmail={userEmail} onLogout={onLogout} sidebar={sidebar}>
-      {tripsQuery.isError && (
-        <Alert variant="destructive" className="m-4">
-          <AlertDescription>Failed to load trips. Try again.</AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex-1 min-h-0">
         <TripMap
           points={tripPoints}

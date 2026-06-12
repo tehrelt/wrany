@@ -108,7 +108,7 @@ function RouteCard({
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-muted-foreground">{dateStr}</span>
         <Badge variant="secondary" className="text-xs">
-          {route.trips_count} trip{route.trips_count !== 1 ? 's' : ''}
+          {route.trips_count} {route.trips_count !== 1 ? 'runs' : 'run'}
         </Badge>
       </div>
       <div className="flex gap-4 text-sm font-medium">
@@ -129,10 +129,12 @@ function formatSpeed(mps: number | undefined): string {
 function TripResultCard({ label, trip }: { label: string; trip: { trip_id?: string; started_at?: string; duration_sec?: number; distance_m?: number; avg_speed_mps?: number } }) {
   const date = trip.started_at ? new Date(trip.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'
   return (
-    <div className="rounded-lg border p-2 flex-1 text-xs">
-      <div className="text-muted-foreground font-medium mb-1">{label}</div>
+    <div className="rounded-lg bg-muted/40 p-3 flex-1">
+      <div className="text-xs text-muted-foreground font-medium mb-1">{label}</div>
       <div className="font-semibold text-sm">{formatDuration(trip.duration_sec ?? 0)}</div>
-      <div className="text-muted-foreground">{date} · {formatDistance(trip.distance_m ?? 0)} · {formatSpeed(trip.avg_speed_mps)}</div>
+      <div className="text-xs text-muted-foreground mt-0.5">
+        {date} · {formatDistance(trip.distance_m ?? 0)} · {formatSpeed(trip.avg_speed_mps)}
+      </div>
     </div>
   )
 }
@@ -141,7 +143,14 @@ function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
   const { best, latest, comparison, attempts_count } = result
 
   if (!attempts_count) {
-    return <p className="text-xs text-muted-foreground">No completed attempts yet.</p>
+    return (
+      <div className="py-4 text-center">
+        <p className="text-sm text-muted-foreground">No runs recorded yet.</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Complete a tracked trip on this route to see your results.
+        </p>
+      </div>
+    )
   }
 
   const isPersonalRecord = comparison?.latest_vs_best_sec === 0
@@ -152,16 +161,16 @@ function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
       <div className="flex gap-2">
         {best && <TripResultCard label="Best" trip={best} />}
         {latest && <TripResultCard label="Latest" trip={latest} />}
-        <div className="rounded-lg border p-2 text-xs flex flex-col justify-center items-center gap-1 min-w-[80px]">
-          <div className="text-muted-foreground font-medium">vs Best</div>
+        <div className="rounded-lg bg-muted/40 p-3 flex flex-col justify-center items-center gap-1 min-w-[80px]">
+          <div className="text-xs text-muted-foreground font-medium">vs Best</div>
           {isPersonalRecord ? (
-            <Badge variant="default" className="text-xs">Personal Record</Badge>
+            <Badge variant="default" className="text-xs">PR</Badge>
           ) : (
-            <span className={diff > 0 ? 'text-orange-500 font-semibold' : 'text-green-600 font-semibold'}>
+            <span className={diff > 0 ? 'text-orange-500 font-semibold text-sm' : 'text-green-600 font-semibold text-sm'}>
               {diff > 0 ? `+${diff}s` : `${diff}s`}
             </span>
           )}
-          <div className="text-muted-foreground">{attempts_count} attempt{attempts_count !== 1 ? 's' : ''}</div>
+          <div className="text-xs text-muted-foreground">{attempts_count} {attempts_count !== 1 ? 'runs' : 'run'}</div>
         </div>
       </div>
     </div>
@@ -170,7 +179,11 @@ function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
 
 function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
   if (attempts.length === 0) {
-    return <p className="text-xs text-muted-foreground">No attempts yet.</p>
+    return (
+      <div className="py-4 text-center">
+        <p className="text-xs text-muted-foreground">No attempts recorded for this route yet.</p>
+      </div>
+    )
   }
   return (
     <table className="w-full text-xs">
@@ -180,7 +193,7 @@ function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
           <th className="text-right pb-1 pr-3 font-medium">Distance</th>
           <th className="text-right pb-1 pr-3 font-medium">Duration</th>
           <th className="text-right pb-1 pr-3 font-medium">Speed</th>
-          <th className="text-right pb-1 font-medium">Score</th>
+          <th className="text-right pb-1 font-medium">Match</th>
         </tr>
       </thead>
       <tbody>
@@ -196,14 +209,14 @@ function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
                 a.is_best ? 'bg-yellow-50 dark:bg-yellow-950/20' : '',
               ].join(' ')}
             >
-              <td className="py-1 pr-3 text-muted-foreground">
+              <td className="py-1.5 pr-3 text-muted-foreground">
                 {a.is_best && <span className="text-yellow-600 mr-1">★</span>}
                 {date}
               </td>
-              <td className="py-1 pr-3 text-right">{formatDistance(a.distance_m ?? 0)}</td>
-              <td className="py-1 pr-3 text-right font-medium">{formatDuration(a.duration_sec ?? 0)}</td>
-              <td className="py-1 pr-3 text-right">{formatSpeed(a.avg_speed_mps)}</td>
-              <td className="py-1 text-right">{((a.match_score ?? 0) * 100).toFixed(0)}%</td>
+              <td className="py-1.5 pr-3 text-right">{formatDistance(a.distance_m ?? 0)}</td>
+              <td className="py-1.5 pr-3 text-right font-medium">{formatDuration(a.duration_sec ?? 0)}</td>
+              <td className="py-1.5 pr-3 text-right">{formatSpeed(a.avg_speed_mps)}</td>
+              <td className="py-1.5 text-right">{((a.match_score ?? 0) * 100).toFixed(0)}%</td>
             </tr>
           )
         })}
@@ -249,7 +262,6 @@ export function RoutesPage({ onLogout }: Props) {
   }
 
   const geoJSON = pointsQuery.data ? pointsToGeoJSON(pointsQuery.data) : pointsToGeoJSON([])
-
   const routes = routesQuery.data?.items ?? []
 
   const sidebar = (
@@ -257,7 +269,7 @@ export function RoutesPage({ onLogout }: Props) {
       <div className="shrink-0">
         <h2 className="text-sm font-semibold">Routes</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {routes.length} route{routes.length !== 1 ? 's' : ''}
+          {routes.length} {routes.length !== 1 ? 'routes' : 'route'} detected
         </p>
       </div>
 
@@ -271,12 +283,17 @@ export function RoutesPage({ onLogout }: Props) {
 
       {routesQuery.isError && (
         <Alert variant="destructive">
-          <AlertDescription>Failed to load routes.</AlertDescription>
+          <AlertDescription>Could not load routes. Try again.</AlertDescription>
         </Alert>
       )}
 
-      {!routesQuery.isLoading && routes.length === 0 && (
-        <p className="text-xs text-muted-foreground">No routes yet.</p>
+      {!routesQuery.isLoading && !routesQuery.isError && routes.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-10 px-2 text-center">
+          <p className="text-sm font-medium text-muted-foreground">No routes discovered yet</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Routes are detected automatically when you repeat similar trips.
+          </p>
+        </div>
       )}
 
       <div className="flex flex-col gap-2 overflow-y-auto flex-1">
@@ -295,7 +312,6 @@ export function RoutesPage({ onLogout }: Props) {
   return (
     <AppLayout userEmail={userEmail} onLogout={onLogout} sidebar={sidebar}>
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Map */}
         <div className="flex-1 min-h-0">
           <Map
             initialViewState={{ longitude: 37.618, latitude: 55.751, zoom: 11 }}
@@ -310,10 +326,9 @@ export function RoutesPage({ onLogout }: Props) {
           </Map>
         </div>
 
-        {/* Personal Records + Attempts */}
         {selectedRoute && (
-          <div className="border-t shrink-0 overflow-y-auto" style={{ maxHeight: '320px' }}>
-            <div className="p-3 space-y-3">
+          <div className="border-t shrink-0 overflow-y-auto max-h-80">
+            <div className="p-4 space-y-4">
               <h3 className="text-sm font-semibold">
                 {selectedRoute.name ?? `Route ${selectedRoute.id.slice(0, 8)}`}
               </h3>
@@ -324,7 +339,7 @@ export function RoutesPage({ onLogout }: Props) {
 
               {(resultsQuery.isError || attemptsQuery.isError) && (
                 <Alert variant="destructive">
-                  <AlertDescription>Failed to load results.</AlertDescription>
+                  <AlertDescription>Could not load results. Try again.</AlertDescription>
                 </Alert>
               )}
 

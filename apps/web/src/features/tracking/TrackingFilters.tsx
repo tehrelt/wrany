@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { subHours, formatISO } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,6 +61,8 @@ export function TrackingFilters({
   onSettingsChange,
   onRefresh,
 }: Props) {
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -101,62 +104,75 @@ export function TrackingFilters({
 
       <Separator />
 
-      <div className="flex flex-col gap-3">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Display</Label>
+      <button
+        type="button"
+        className="flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setShowAdvanced(v => !v)}
+      >
+        <span>Display settings</span>
+        {showAdvanced
+          ? <ChevronDown className="h-3.5 w-3.5" />
+          : <ChevronRight className="h-3.5 w-3.5" />}
+      </button>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <Label className="text-xs">Speed threshold</Label>
-            <span className="text-xs text-muted-foreground">{settings.speedThresholdMps.toFixed(1)} m/s</span>
+      {showAdvanced && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center">
+              <Label className="text-xs">Speed threshold</Label>
+              <span className="text-xs text-muted-foreground">
+                {(settings.speedThresholdMps * 3.6).toFixed(1)} km/h
+              </span>
+            </div>
+            <Slider
+              min={0.5}
+              max={10}
+              step={0.5}
+              value={[settings.speedThresholdMps]}
+              onValueChange={([v]) => onSettingsChange({ ...settings, speedThresholdMps: v })}
+            />
+            <p className="text-[10px] text-muted-foreground">Points below this speed are treated as stationary</p>
           </div>
-          <Slider
-            min={0.5}
-            max={10}
-            step={0.5}
-            value={[settings.speedThresholdMps]}
-            onValueChange={([v]) => onSettingsChange({ ...settings, speedThresholdMps: v })}
-          />
-          <p className="text-[10px] text-muted-foreground">Points below this speed are treated as stationary</p>
-        </div>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <Label className="text-xs">Min stay duration</Label>
-            <span className="text-xs text-muted-foreground">
-              {settings.minStaySec >= 60
-                ? `${Math.floor(settings.minStaySec / 60)} min`
-                : `${settings.minStaySec} s`}
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center">
+              <Label className="text-xs">Min stay duration</Label>
+              <span className="text-xs text-muted-foreground">
+                {settings.minStaySec >= 60
+                  ? `${Math.floor(settings.minStaySec / 60)} min`
+                  : `${settings.minStaySec} s`}
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={600}
+              step={30}
+              value={[settings.minStaySec]}
+              onValueChange={([v]) => onSettingsChange({ ...settings, minStaySec: v })}
+            />
+            <p className="text-[10px] text-muted-foreground">Stationary clusters shorter than this are hidden</p>
           </div>
-          <Slider
-            min={0}
-            max={600}
-            step={30}
-            value={[settings.minStaySec]}
-            onValueChange={([v]) => onSettingsChange({ ...settings, minStaySec: v })}
-          />
-          <p className="text-[10px] text-muted-foreground">Stationary clusters shorter than this are hidden</p>
-        </div>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <Label className="text-xs">Min move duration</Label>
-            <span className="text-xs text-muted-foreground">
-              {(settings.minMoveSec ?? 30) >= 60
-                ? `${Math.floor((settings.minMoveSec ?? 30) / 60)} min`
-                : `${settings.minMoveSec ?? 30} s`}
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center">
+              <Label className="text-xs">Min move duration</Label>
+              <span className="text-xs text-muted-foreground">
+                {(settings.minMoveSec ?? 30) >= 60
+                  ? `${Math.floor((settings.minMoveSec ?? 30) / 60)} min`
+                  : `${settings.minMoveSec ?? 30} s`}
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={300}
+              step={10}
+              value={[settings.minMoveSec ?? 30]}
+              onValueChange={([v]) => onSettingsChange({ ...settings, minMoveSec: v })}
+            />
+            <p className="text-[10px] text-muted-foreground">Movement bursts shorter than this are treated as noise</p>
           </div>
-          <Slider
-            min={0}
-            max={300}
-            step={10}
-            value={[settings.minMoveSec ?? 30]}
-            onValueChange={([v]) => onSettingsChange({ ...settings, minMoveSec: v })}
-          />
-          <p className="text-[10px] text-muted-foreground">Movement bursts shorter than this are treated as noise</p>
         </div>
-      </div>
+      )}
     </div>
   )
 }
