@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+In Progress
 
 ---
 
@@ -395,7 +395,40 @@ curl -s http://localhost:8081/metrics | grep nats_messages
 
 ## Implementation Log
 
-_Заполняется в процессе реализации._
+### 2026-06-12 — Основная реализация
+
+**T1: `libs/observability`** — создан shared пакет:
+- `logger/logger.go` — `New(service) *slog.Logger`, JSON handler
+- `logger/context.go` — `WithRequestID`, `RequestIDFromContext`, `FromContext`
+- `metrics/registry.go` — `NewRegistry()` с Go/process collectors
+- `middleware/requestid.go` — `RequestID` HTTP middleware (X-Request-Id in/out)
+- `middleware/metrics.go` — `NewHTTPMetrics`, `Metrics` middleware
+- Тесты: logger (4), middleware (3) — все зелёные
+
+**T2–T5: tracking-gateway**:
+- `internal/observ/metrics.go` — `GatewayMetrics` с полным набором WS/HTTP/NATS/auth метрик
+- `router.go` — `/metrics` endpoint, цепочка RequestID → LoggingMiddleware → CORS → mux
+- `middleware.go` — `LoggingMiddleware(next, metrics)` пишет request_id в лог + Prometheus
+- `websocket_handler.go` — session_id correlation, WS metrics (active/total/accepted/rejected, batches, points)
+- `main.go` — slog с `service=tracking-gateway`
+
+**T6–T8: tracking-worker**:
+- `internal/observ/metrics.go` — `WorkerMetrics` (NATS consumer, raw points, trips, routes, dead-letter)
+- `transport/http/router.go` — `/metrics` endpoint с WorkerMetrics registry
+- `app.go` — slog вместо `log`, `WorkerMetrics` wired
+- `main.go` — slog с `service=tracking-worker`
+
+**T9–T12: Инфра**:
+- `infra/observability/prometheus/prometheus.yml` — scrape gateway, worker, postgres-exporter, nats-exporter
+- `infra/observability/loki/loki-config.yml` — filesystem storage
+- `infra/observability/promtail/promtail-config.yml` — Docker discovery, JSON pipeline
+- `infra/observability/grafana/provisioning/` — datasources (Prometheus + Loki), dashboards provider
+- `infra/observability/grafana/dashboards/` — 4 dashboards: backend-overview, websocket-ingestion, worker-jobs, logs-overview
+- `docker-compose.yml` — 6 новых сервисов (profile: observability): prometheus, grafana, loki, promtail, postgres-exporter, nats-exporter
+- `Makefile` — observability-up/down/logs, prometheus-check, grafana-check, loki-check
+- `.env.example` — GRAFANA_PASSWORD, POSTGRES_EXPORTER_DSN, URL комментарии
+
+**Порты**: Prometheus 9090, Grafana 3001, Loki 3100 (без конфликта с web app 3000)
 
 ---
 
