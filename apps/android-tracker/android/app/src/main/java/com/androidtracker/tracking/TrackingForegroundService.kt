@@ -17,6 +17,9 @@ class TrackingForegroundService : Service() {
 
         @Volatile var isRunning = false
         @Volatile var lastLocationTime: String? = null
+        @Volatile private var senderRef: BatchSender? = null
+
+        val wsConnected: Boolean get() = senderRef?.wsConnected ?: false
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -33,6 +36,7 @@ class TrackingForegroundService : Service() {
             scope.launch { db.dao().insert(point) }
         }
         batchSender = BatchSender(this, db.dao(), scope)
+        senderRef = batchSender
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,6 +80,7 @@ class TrackingForegroundService : Service() {
         notificationUpdateJob?.cancel()
         locationProvider.stop()
         batchSender.stop()
+        senderRef = null
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         Log.i(TAG, "Tracking stopped")

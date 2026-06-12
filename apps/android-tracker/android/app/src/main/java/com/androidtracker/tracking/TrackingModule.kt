@@ -60,12 +60,18 @@ class TrackingModule(reactContext: ReactApplicationContext) :
                 val pending = dao.pendingCount()
                 val failed = dao.failedCount()
                 val lastSync = dao.lastSyncTime()
+                val wsStatus = when {
+                    !TrackingForegroundService.isRunning -> "disconnected"
+                    TrackingForegroundService.wsConnected -> "connected"
+                    else -> "connecting"
+                }
                 val result = Arguments.createMap().apply {
                     putBoolean("serviceRunning", TrackingForegroundService.isRunning)
                     putInt("pendingCount", pending)
                     putInt("failedCount", failed)
                     putString("lastLocationTime", TrackingForegroundService.lastLocationTime)
                     putString("lastSyncTime", lastSync)
+                    putString("wsStatus", wsStatus)
                 }
                 promise.resolve(result)
             } catch (e: Exception) {

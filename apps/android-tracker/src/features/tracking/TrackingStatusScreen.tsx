@@ -24,6 +24,7 @@ const POLL_INTERVAL_MS = 3000;
 
 const INITIAL_STATUS: TrackingStatus = {
   serviceRunning: false,
+  wsStatus: 'disconnected',
   pendingCount: 0,
   failedCount: 0,
   lastLocationTime: null,
@@ -82,6 +83,11 @@ export function TrackingStatusScreen(): React.JSX.Element {
     };
   }, [checkPermissions, refreshStatus]);
 
+  useEffect(() => {
+    autoConnectIfReady();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function requestFineLocation(): Promise<boolean> {
     const result = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
@@ -112,6 +118,24 @@ export function TrackingStatusScreen(): React.JSX.Element {
         { text: 'Open Settings', onPress: () => Linking.openSettings() },
       ],
     );
+  }
+
+  async function autoConnectIfReady(): Promise<void> {
+    try {
+      const s = await trackingModule.getTrackingStatus();
+      if (s.serviceRunning) return;
+      const token = await getAccessToken();
+      if (!token) return;
+      const fineOk = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+      if (!fineOk) return;
+      const deviceId = await getOrCreateDeviceId();
+      await trackingModule.enableTracking(deviceId, token, WS_URL);
+      await refreshStatus();
+    } catch {
+      // silent — user can enable manually
+    }
   }
 
   async function handleEnable(): Promise<void> {
@@ -190,6 +214,7 @@ export function TrackingStatusScreen(): React.JSX.Element {
       {/* Service status */}
       <Section title="Service">
         <Row label="Running" value={status.serviceRunning ? 'yes' : 'no'} />
+        <Row label="WS connection" value={status.wsStatus} />
         <Row label="Pending points" value={String(status.pendingCount)} />
         <Row label="Failed points" value={String(status.failedCount)} />
         <Row
@@ -267,9 +292,13 @@ function Row({
   label: string;
   value: string;
 }): React.JSX.Element {
-  const isGood = value === 'yes' || value === 'granted' || value === 'running';
+  const isGood =
+    value === 'yes' || value === 'granted' || value === 'connected';
   const isBad =
-    value === 'no' || value === 'denied' || value === 'never_ask_again';
+    value === 'no' ||
+    value === 'denied' ||
+    value === 'never_ask_again' ||
+    value === 'disconnected';
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>

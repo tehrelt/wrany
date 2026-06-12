@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { clearTokens, getAccessToken } from '../storage/tokenStorage';
 import { AuthScreen } from '../screens/AuthScreen';
 import { TrackerScreen } from '../screens/TrackerScreen';
@@ -31,40 +32,42 @@ export function App(): React.JSX.Element {
   }
 
   return (
-    <View style={styles.root}>
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'background' && styles.activeTab]}
-          onPress={() => setTab('background')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              tab === 'background' && styles.activeTabText,
-            ]}
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.root}>
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'background' && styles.activeTab]}
+            onPress={() => setTab('background')}
           >
-            Background
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'legacy' && styles.activeTab]}
-          onPress={() => setTab('legacy')}
-        >
-          <Text
-            style={[styles.tabText, tab === 'legacy' && styles.activeTabText]}
+            <Text
+              style={[
+                styles.tabText,
+                tab === 'background' && styles.activeTabText,
+              ]}
+            >
+              Background
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'legacy' && styles.activeTab]}
+            onPress={() => setTab('legacy')}
           >
-            Legacy WS
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.content}>
-        {tab === 'background' ? (
-          <TrackingStatusScreen />
-        ) : (
-          <TrackerScreen onSessionExpired={handleSessionExpired} />
-        )}
-      </View>
-    </View>
+            <Text
+              style={[styles.tabText, tab === 'legacy' && styles.activeTabText]}
+            >
+              Legacy WS
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.content}>
+          {tab === 'background' ? (
+            <TrackingStatusScreen />
+          ) : (
+            <TrackerScreen onSessionExpired={handleSessionExpired} />
+          )}
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
