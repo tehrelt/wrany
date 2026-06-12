@@ -29,7 +29,6 @@ services:
     # 4222 is bound to 127.0.0.1 for local dev only (integration tests, nats CLI).
     ports:
       - "127.0.0.1:4222:4222"
-      - "8222:8222"
     healthcheck:
       test:
         [
