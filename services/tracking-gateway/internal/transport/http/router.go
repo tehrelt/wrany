@@ -15,6 +15,7 @@ type RouterDeps struct {
 	TrackingQuery *usecase.TrackingQueryUsecase
 	Trips         *usecase.TripQueryUsecase
 	Routes        *usecase.RouteQueryUsecase
+	RouteResults  *usecase.RouteResultQueryUsecase
 	JWTSecret     []byte
 	Config        config.Config
 }
@@ -30,6 +31,7 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	trackingQueryH := NewTrackingQueryHandler(deps.TrackingQuery)
 	tripH := NewTripHandler(deps.Trips)
 	routeH := NewRouteHandler(deps.Routes)
+	routeResultH := NewRouteResultHandler(deps.RouteResults)
 
 	mux.HandleFunc("/healthz", HealthzHandler)
 	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
@@ -49,6 +51,8 @@ func NewRouter(deps RouterDeps) *http.ServeMux {
 	mux.Handle("GET /v1/routes/{id}", auth(http.HandlerFunc(routeH.GetRoute)))
 	mux.Handle("GET /v1/routes/{id}/trips", auth(http.HandlerFunc(routeH.ListRouteTrips)))
 	mux.Handle("GET /v1/routes/{id}/points", auth(http.HandlerFunc(routeH.GetRoutePoints)))
+	mux.Handle("GET /v1/routes/{route_id}/results", auth(http.HandlerFunc(routeResultH.GetRouteResult)))
+	mux.Handle("GET /v1/routes/{route_id}/attempts", auth(http.HandlerFunc(routeResultH.ListRouteAttempts)))
 	wsAuth := WSAuthMiddleware(deps.JWTSecret)
 	mux.Handle("GET /v1/ws/tracker", wsAuth(trackerH))
 

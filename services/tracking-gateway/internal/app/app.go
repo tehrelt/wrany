@@ -29,6 +29,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	trackingQueryRepo := postgres.NewTrackingQueryRepo(db)
 	tripQueryRepo := postgres.NewTripQueryRepo(db)
 	routeQueryRepo := postgres.NewRouteQueryRepo(db)
+	routeResultQueryRepo := postgres.NewRouteResultQueryRepo(db)
 
 	authUC := usecase.NewAuthUsecase(userRepo, tokenRepo, usecase.AuthConfig{
 		JWTSecret:  []byte(cfg.JWTSecret),
@@ -40,6 +41,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	trackingQueryUC := usecase.NewTrackingQueryUsecase(trackingQueryRepo)
 	tripQueryUC := usecase.NewTripQueryUsecase(tripQueryRepo)
 	routeQueryUC := usecase.NewRouteQueryUsecase(routeQueryRepo)
+	routeResultQueryUC := usecase.NewRouteResultQueryUsecase(routeResultQueryRepo, routeQueryRepo)
 
 	if cfg.NatsURL == "" {
 		slog.Error("nats: NATS_URL is required — set NATS_URL to connect to JetStream")
@@ -77,6 +79,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		TrackingQuery: trackingQueryUC,
 		Trips:         tripQueryUC,
 		Routes:        routeQueryUC,
+		RouteResults:  routeResultQueryUC,
 		JWTSecret:     []byte(cfg.JWTSecret),
 		Config:        cfg,
 	})

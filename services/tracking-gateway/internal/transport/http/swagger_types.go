@@ -260,3 +260,57 @@ type RoutePointsEnv struct {
 	Data  []RoutePointItem `json:"data"`
 	Error *string          `json:"error"`
 }
+
+// TripResultItem holds best or latest trip metrics.
+type TripResultItem struct {
+	TripID      string  `json:"trip_id"`
+	StartedAt   string  `json:"started_at"`
+	DurationSec int64   `json:"duration_sec"`
+	DistanceM   float64 `json:"distance_m"`
+	AvgSpeedMps float64 `json:"avg_speed_mps"`
+}
+
+// RouteResultComparisonItem compares the latest trip against the best.
+type RouteResultComparisonItem struct {
+	LatestVsBestSec     int64   `json:"latest_vs_best_sec"`
+	LatestVsBestPercent float64 `json:"latest_vs_best_percent"`
+}
+
+// RouteResultResponse is the data payload for GET /v1/routes/{route_id}/results.
+type RouteResultResponse struct {
+	RouteID       string                     `json:"route_id"`
+	AttemptsCount int                        `json:"attempts_count"`
+	Best          *TripResultItem            `json:"best"`
+	Latest        *TripResultItem            `json:"latest"`
+	Comparison    *RouteResultComparisonItem `json:"comparison"`
+}
+
+// TripAttemptItem is a single attempt in the attempts list.
+type TripAttemptItem struct {
+	TripID      string  `json:"trip_id"`
+	StartedAt   string  `json:"started_at"`
+	EndedAt     *string `json:"ended_at"`
+	DurationSec int64   `json:"duration_sec"`
+	DistanceM   float64 `json:"distance_m"`
+	AvgSpeedMps float64 `json:"avg_speed_mps"`
+	MatchScore  float64 `json:"match_score"`
+	IsBest      bool    `json:"is_best"`
+}
+
+// RouteAttemptListResponse is the data payload for GET /v1/routes/{route_id}/attempts.
+type RouteAttemptListResponse struct {
+	Items      []TripAttemptItem `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+// RouteResultEnv is the envelope for GET /v1/routes/{route_id}/results.
+type RouteResultEnv struct {
+	Data  RouteResultResponse `json:"data"`
+	Error *string             `json:"error"`
+}
+
+// RouteAttemptListEnv is the envelope for GET /v1/routes/{route_id}/attempts.
+type RouteAttemptListEnv struct {
+	Data  RouteAttemptListResponse `json:"data"`
+	Error *string                  `json:"error"`
+}

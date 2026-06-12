@@ -1,7 +1,12 @@
 import { apiClient } from '@/api/client'
 import { formatDistance, formatDuration } from '@/features/trips/tripsApi'
+import type {
+  InternalTransportHttpRouteResultResponse as RouteResultResponse,
+  InternalTransportHttpTripAttemptItem as TripAttemptItem,
+} from '@/api/generated/model'
 
 export { formatDistance, formatDuration }
+export type { RouteResultResponse, TripAttemptItem }
 
 export interface Route {
   id: string
@@ -70,5 +75,26 @@ export async function getRouteTrips(
 
 export async function getRoutePoints(routeId: string): Promise<RoutePoint[]> {
   const res = await apiClient.get<{ data: RoutePoint[] }>(`/v1/routes/${routeId}/points`)
+  return res.data.data
+}
+
+export async function getRouteResults(routeId: string): Promise<RouteResultResponse> {
+  const res = await apiClient.get<{ data: RouteResultResponse }>(`/v1/routes/${routeId}/results`)
+  return res.data.data
+}
+
+export interface RouteAttemptsResponse {
+  items: TripAttemptItem[]
+  next_cursor: string | null
+}
+
+export async function getRouteAttempts(
+  routeId: string,
+  params?: { limit?: number; cursor?: string },
+): Promise<RouteAttemptsResponse> {
+  const res = await apiClient.get<{ data: RouteAttemptsResponse }>(
+    `/v1/routes/${routeId}/attempts`,
+    { params },
+  )
   return res.data.data
 }
