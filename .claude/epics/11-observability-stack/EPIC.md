@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Done
 
 ---
 
@@ -280,21 +280,21 @@ make loki-check
 
 ## Tasks
 
-- [ ] T1: Создать `libs/observability` пакет (logger, metrics/registry, middleware)
-- [ ] T2: Добавить structured JSON slog в tracking-gateway
-- [ ] T3: Добавить request_id middleware в tracking-gateway
-- [ ] T4: Добавить Prometheus metrics в tracking-gateway + `/metrics` endpoint
-- [ ] T5: Добавить WS session_id correlation в tracking-gateway
-- [ ] T6: Добавить structured JSON slog в tracking-worker
-- [ ] T7: Добавить Prometheus metrics в tracking-worker + `/metrics` HTTP server
-- [ ] T8: Добавить NATS event_id correlation в tracking-worker logs
-- [ ] T9: Создать `infra/observability/` конфиги (prometheus, loki, promtail, grafana provisioning)
-- [ ] T10: Добавить observability services в docker-compose.yml (profile: observability)
-- [ ] T11: Создать Grafana dashboards JSON (4 dashboards)
-- [ ] T12: Добавить Makefile targets (observability-up/down/logs/checks)
-- [ ] T13: Обновить .env.example (observability vars)
-- [ ] T14: Написать тесты (request_id middleware, metrics middleware, logger)
-- [ ] T15: Обновить README и документацию
+- [x] T1: Создать `libs/observability` пакет (logger, metrics/registry, middleware)
+- [x] T2: Добавить structured JSON slog в tracking-gateway
+- [x] T3: Добавить request_id middleware в tracking-gateway
+- [x] T4: Добавить Prometheus metrics в tracking-gateway + `/metrics` endpoint
+- [x] T5: Добавить WS session_id correlation в tracking-gateway
+- [x] T6: Добавить structured JSON slog в tracking-worker
+- [x] T7: Добавить Prometheus metrics в tracking-worker + `/metrics` HTTP server
+- [x] T8: Добавить NATS event_id correlation в tracking-worker logs
+- [x] T9: Создать `infra/observability/` конфиги (prometheus, loki, promtail, grafana provisioning)
+- [x] T10: Добавить observability services в docker-compose.yml (profile: observability)
+- [x] T11: Создать Grafana dashboards JSON (4 dashboards)
+- [x] T12: Добавить Makefile targets (observability-up/down/logs/checks)
+- [x] T13: Обновить .env.example (observability vars)
+- [x] T14: Написать тесты (request_id middleware, metrics middleware, logger)
+- [x] T15: Обновить README и документацию
 
 ---
 
@@ -434,4 +434,43 @@ curl -s http://localhost:8081/metrics | grep nats_messages
 
 ## Final Report
 
-_Заполняется после завершения._
+### Дата завершения: 2026-06-13
+
+### Что сделано
+
+Полный observability stack для WR any% backend:
+
+**`libs/observability`** — shared Go-пакет:
+- `logger/` — JSON slog с полем `service`, `request_id` из context
+- `metrics/` — custom Prometheus registry с Go/process collectors
+- `middleware/` — HTTP middleware: RequestID (X-Request-Id) + HTTPMetrics
+- 7 unit-тестов, все зелёные
+
+**tracking-gateway** — `/metrics` endpoint, 14 Prometheus метрик (WS, HTTP, NATS, auth, DB), JSON logs с `session_id` correlation
+
+**tracking-worker** — отдельный HTTP-сервер `/metrics` + `/healthz`, 13 Prometheus метрик (NATS consume, points, trips, routes, dead-letter), JSON logs с `event_id` correlation
+
+**infra/observability** — готовая инфра:
+- `prometheus.yml` — scrape gateway (8080), worker (8081), postgres-exporter (9187), nats-exporter (7777)
+- `loki-config.yml`, `promtail-config.yml` — Docker log discovery + JSON pipeline
+- Grafana provisioning: datasources (Prometheus + Loki), 4 dashboards
+
+**docker-compose.yml** — 6 новых сервисов под `profile: observability`: prometheus, grafana, loki, promtail, postgres-exporter, nats-exporter. Порты: 9090, 3001, 3100. `make up` не затронут.
+
+**Makefile** — `observability-up/down/logs`, `prometheus-check`, `grafana-check`, `loki-check`
+
+**Документация** — `infra/observability/README.md`, обновлены README gateway и worker
+
+### Acceptance Criteria
+
+Все 32 критерия выполнены.
+
+### Отклонения от плана
+
+Нет. Реализовано точно по Solution Design.
+
+### Технический долг
+
+- Loki filesystem storage (данные теряются при рестарте) — достаточно для local dev
+- Distributed tracing (OpenTelemetry/Tempo) — явно отложено, задокументировано в README
+- Dashboard panels не настроены под реальный трафик — корректируются по мере использования
