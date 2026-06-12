@@ -1,13 +1,11 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import Map, { Source, Layer, type LayerProps } from 'react-map-gl/maplibre'
-import type { StyleSpecification } from 'maplibre-gl'
-import type { FeatureCollection } from 'geojson'
-import { AppLayout } from '@/components/layout/AppLayout'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useAuth } from '@/features/auth/useAuth'
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { RouteMap } from "@/components/map/RouteMap";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/features/auth/useAuth";
 import {
   listRoutes,
   getRoutePoints,
@@ -16,73 +14,12 @@ import {
   formatDistance,
   formatDuration,
   type Route,
-  type RoutePoint,
   type RouteResultResponse,
   type TripAttemptItem,
-} from '@/features/routes/routesApi'
-import { MAP_STYLE_URL } from '@/config/env'
+} from "@/features/routes/routesApi";
 
 interface Props {
-  onLogout: () => void
-}
-
-const OSM_FALLBACK: StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
-}
-
-const routeLineLayer: LayerProps = {
-  id: 'route-line',
-  type: 'line',
-  filter: ['==', '$type', 'LineString'],
-  paint: { 'line-color': '#3b82f6', 'line-width': 3 },
-}
-
-const startDotLayer: LayerProps = {
-  id: 'route-start',
-  type: 'circle',
-  filter: ['==', ['get', 'role'], 'start'],
-  paint: { 'circle-radius': 7, 'circle-color': '#22c55e', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
-}
-
-const endDotLayer: LayerProps = {
-  id: 'route-end',
-  type: 'circle',
-  filter: ['==', ['get', 'role'], 'end'],
-  paint: { 'circle-radius': 7, 'circle-color': '#ef4444', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
-}
-
-function pointsToGeoJSON(pts: RoutePoint[]): FeatureCollection {
-  if (pts.length === 0) return { type: 'FeatureCollection', features: [] }
-  const coords = pts.map(p => [p.lon, p.lat] as [number, number])
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: coords },
-        properties: {},
-      },
-      {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords[0] },
-        properties: { role: 'start' },
-      },
-      {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords[coords.length - 1] },
-        properties: { role: 'end' },
-      },
-    ],
-  }
+  onLogout: () => void;
 }
 
 function RouteCard({
@@ -90,25 +27,28 @@ function RouteCard({
   selected,
   onClick,
 }: {
-  route: Route
-  selected: boolean
-  onClick: () => void
+  route: Route;
+  selected: boolean;
+  onClick: () => void;
 }) {
-  const date = new Date(route.updated_at)
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const date = new Date(route.updated_at);
+  const dateStr = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <button
       onClick={onClick}
       className={[
-        'w-full text-left rounded-lg border p-3 transition-colors hover:bg-accent',
-        selected ? 'border-primary bg-accent' : 'border-border',
-      ].join(' ')}
+        "w-full text-left rounded-lg border p-3 transition-colors hover:bg-accent",
+        selected ? "border-primary bg-accent" : "border-border",
+      ].join(" ")}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-muted-foreground">{dateStr}</span>
         <Badge variant="secondary" className="text-xs">
-          {route.trips_count} {route.trips_count !== 1 ? 'runs' : 'run'}
+          {route.trips_count} {route.trips_count !== 1 ? "runs" : "run"}
         </Badge>
       </div>
       <div className="flex gap-4 text-sm font-medium">
@@ -118,29 +58,51 @@ function RouteCard({
         {route.name ?? `Route ${route.id.slice(0, 8)}`}
       </div>
     </button>
-  )
+  );
 }
 
 function formatSpeed(mps: number | undefined): string {
-  if (!mps) return '—'
-  return `${(mps * 3.6).toFixed(1)} km/h`
+  if (!mps) return "—";
+  return `${mps} m/s`;
 }
 
-function TripResultCard({ label, trip }: { label: string; trip: { trip_id?: string; started_at?: string; duration_sec?: number; distance_m?: number; avg_speed_mps?: number } }) {
-  const date = trip.started_at ? new Date(trip.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'
+function TripResultCard({
+  label,
+  trip,
+}: {
+  label: string;
+  trip: {
+    trip_id?: string;
+    started_at?: string;
+    duration_sec?: number;
+    distance_m?: number;
+    avg_speed_mps?: number;
+  };
+}) {
+  const date = trip.started_at
+    ? new Date(trip.started_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
   return (
     <div className="rounded-lg bg-muted/40 p-3 flex-1">
-      <div className="text-xs text-muted-foreground font-medium mb-1">{label}</div>
-      <div className="font-semibold text-sm">{formatDuration(trip.duration_sec ?? 0)}</div>
+      <div className="text-xs text-muted-foreground font-medium mb-1">
+        {label}
+      </div>
+      <div className="font-semibold text-sm">
+        {formatDuration(trip.duration_sec ?? 0)}
+      </div>
       <div className="text-xs text-muted-foreground mt-0.5">
-        {date} · {formatDistance(trip.distance_m ?? 0)} · {formatSpeed(trip.avg_speed_mps)}
+        {date} · {formatDistance(trip.distance_m ?? 0)} ·{" "}
+        {formatSpeed(trip.avg_speed_mps)}
       </div>
     </div>
-  )
+  );
 }
 
 function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
-  const { best, latest, comparison, attempts_count } = result
+  const { best, latest, comparison, attempts_count } = result;
 
   if (!attempts_count) {
     return (
@@ -150,11 +112,11 @@ function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
           Complete a tracked trip on this route to see your results.
         </p>
       </div>
-    )
+    );
   }
 
-  const isPersonalRecord = comparison?.latest_vs_best_sec === 0
-  const diff = comparison?.latest_vs_best_sec ?? 0
+  const isPersonalRecord = comparison?.latest_vs_best_sec === 0;
+  const diff = comparison?.latest_vs_best_sec ?? 0;
 
   return (
     <div className="space-y-2">
@@ -162,28 +124,42 @@ function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
         {best && <TripResultCard label="Best" trip={best} />}
         {latest && <TripResultCard label="Latest" trip={latest} />}
         <div className="rounded-lg bg-muted/40 p-3 flex flex-col justify-center items-center gap-1 min-w-[80px]">
-          <div className="text-xs text-muted-foreground font-medium">vs Best</div>
+          <div className="text-xs text-muted-foreground font-medium">
+            vs Best
+          </div>
           {isPersonalRecord ? (
-            <Badge variant="default" className="text-xs">PR</Badge>
+            <Badge variant="default" className="text-xs">
+              PR
+            </Badge>
           ) : (
-            <span className={diff > 0 ? 'text-orange-500 font-semibold text-sm' : 'text-green-600 font-semibold text-sm'}>
+            <span
+              className={
+                diff > 0
+                  ? "text-orange-500 font-semibold text-sm"
+                  : "text-green-600 font-semibold text-sm"
+              }
+            >
               {diff > 0 ? `+${diff}s` : `${diff}s`}
             </span>
           )}
-          <div className="text-xs text-muted-foreground">{attempts_count} {attempts_count !== 1 ? 'runs' : 'run'}</div>
+          <div className="text-xs text-muted-foreground">
+            {attempts_count} {attempts_count !== 1 ? "runs" : "run"}
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
   if (attempts.length === 0) {
     return (
       <div className="py-4 text-center">
-        <p className="text-xs text-muted-foreground">No attempts recorded for this route yet.</p>
+        <p className="text-xs text-muted-foreground">
+          No attempts recorded for this route yet.
+        </p>
       </div>
-    )
+    );
   }
   return (
     <table className="w-full text-xs">
@@ -197,79 +173,92 @@ function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
         </tr>
       </thead>
       <tbody>
-        {attempts.map(a => {
+        {attempts.map((a) => {
           const date = a.started_at
-            ? new Date(a.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-            : '—'
+            ? new Date(a.started_at).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "—";
           return (
             <tr
               key={a.trip_id}
               className={[
-                'border-b last:border-0 hover:bg-accent/50',
-                a.is_best ? 'bg-yellow-50 dark:bg-yellow-950/20' : '',
-              ].join(' ')}
+                "border-b last:border-0 hover:bg-accent/50",
+                a.is_best ? "bg-yellow-50 dark:bg-yellow-950/20" : "",
+              ].join(" ")}
             >
               <td className="py-1.5 pr-3 text-muted-foreground">
                 {a.is_best && <span className="text-yellow-600 mr-1">★</span>}
                 {date}
               </td>
-              <td className="py-1.5 pr-3 text-right">{formatDistance(a.distance_m ?? 0)}</td>
-              <td className="py-1.5 pr-3 text-right font-medium">{formatDuration(a.duration_sec ?? 0)}</td>
-              <td className="py-1.5 pr-3 text-right">{formatSpeed(a.avg_speed_mps)}</td>
-              <td className="py-1.5 text-right">{((a.match_score ?? 0) * 100).toFixed(0)}%</td>
+              <td className="py-1.5 pr-3 text-right">
+                {formatDistance(a.distance_m ?? 0)}
+              </td>
+              <td className="py-1.5 pr-3 text-right font-medium">
+                {formatDuration(a.duration_sec ?? 0)}
+              </td>
+              <td className="py-1.5 pr-3 text-right">
+                {formatSpeed(a.avg_speed_mps)}
+              </td>
+              <td className="py-1.5 text-right">
+                {((a.match_score ?? 0) * 100).toFixed(0)}%
+              </td>
             </tr>
-          )
+          );
         })}
       </tbody>
     </table>
-  )
+  );
 }
 
 export function RoutesPage({ onLogout }: Props) {
-  const { token } = useAuth()
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
+  const { token } = useAuth();
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
 
   const routesQuery = useQuery({
-    queryKey: ['routes'],
+    queryKey: ["routes"],
     queryFn: () => listRoutes({ limit: 50 }),
-  })
+  });
 
   const resultsQuery = useQuery({
-    queryKey: ['route-results', selectedRoute?.id],
+    queryKey: ["route-results", selectedRoute?.id],
     queryFn: () => getRouteResults(selectedRoute!.id),
     enabled: !!selectedRoute,
-  })
+  });
 
   const attemptsQuery = useQuery({
-    queryKey: ['route-attempts', selectedRoute?.id],
+    queryKey: ["route-attempts", selectedRoute?.id],
     queryFn: () => getRouteAttempts(selectedRoute!.id, { limit: 50 }),
     enabled: !!selectedRoute,
-  })
+  });
 
   const pointsQuery = useQuery({
-    queryKey: ['route-points', selectedRoute?.id],
+    queryKey: ["route-points", selectedRoute?.id],
     queryFn: () => getRoutePoints(selectedRoute!.id),
     enabled: !!selectedRoute,
-  })
+  });
 
-  let userEmail = ''
+  let userEmail = "";
   if (token) {
     try {
-      userEmail = (JSON.parse(atob(token.split('.')[1])) as { sub?: string }).sub ?? ''
+      userEmail =
+        (JSON.parse(atob(token.split(".")[1])) as { sub?: string }).sub ?? "";
     } catch {
       // ignore decode errors
     }
   }
 
-  const geoJSON = pointsQuery.data ? pointsToGeoJSON(pointsQuery.data) : pointsToGeoJSON([])
-  const routes = routesQuery.data?.items ?? []
+  const routes = routesQuery.data?.items ?? [];
 
   const sidebar = (
     <div className="flex flex-col gap-3 h-full">
       <div className="shrink-0">
         <h2 className="text-sm font-semibold">Routes</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {routes.length} {routes.length !== 1 ? 'routes' : 'route'} detected
+          {routes.length} {routes.length !== 1 ? "routes" : "route"} detected
         </p>
       </div>
 
@@ -287,17 +276,21 @@ export function RoutesPage({ onLogout }: Props) {
         </Alert>
       )}
 
-      {!routesQuery.isLoading && !routesQuery.isError && routes.length === 0 && (
-        <div className="flex flex-col items-center gap-2 py-10 px-2 text-center">
-          <p className="text-sm font-medium text-muted-foreground">No routes discovered yet</p>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Routes are detected automatically when you repeat similar trips.
-          </p>
-        </div>
-      )}
+      {!routesQuery.isLoading &&
+        !routesQuery.isError &&
+        routes.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-10 px-2 text-center">
+            <p className="text-sm font-medium text-muted-foreground">
+              No routes discovered yet
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Routes are detected automatically when you repeat similar trips.
+            </p>
+          </div>
+        )}
 
       <div className="flex flex-col gap-2 overflow-y-auto flex-1">
-        {routes.map(r => (
+        {routes.map((r) => (
           <RouteCard
             key={r.id}
             route={r}
@@ -307,23 +300,31 @@ export function RoutesPage({ onLogout }: Props) {
         ))}
       </div>
     </div>
-  )
+  );
 
   return (
     <AppLayout userEmail={userEmail} onLogout={onLogout} sidebar={sidebar}>
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex-1 min-h-0">
-          <Map
-            initialViewState={{ longitude: 37.618, latitude: 55.751, zoom: 11 }}
-            style={{ width: '100%', height: '100%' }}
-            mapStyle={MAP_STYLE_URL ?? OSM_FALLBACK}
-          >
-            <Source id="route" type="geojson" data={geoJSON}>
-              <Layer {...routeLineLayer} />
-              <Layer {...startDotLayer} />
-              <Layer {...endDotLayer} />
-            </Source>
-          </Map>
+          <RouteMap
+            points={pointsQuery.data ?? []}
+            startPoint={
+              selectedRoute
+                ? {
+                    lat: selectedRoute.start_lat,
+                    lon: selectedRoute.start_lon,
+                  }
+                : undefined
+            }
+            finishPoint={
+              selectedRoute
+                ? {
+                    lat: selectedRoute.end_lat,
+                    lon: selectedRoute.end_lon,
+                  }
+                : undefined
+            }
+          />
         </div>
 
         {selectedRoute && (
@@ -339,7 +340,9 @@ export function RoutesPage({ onLogout }: Props) {
 
               {(resultsQuery.isError || attemptsQuery.isError) && (
                 <Alert variant="destructive">
-                  <AlertDescription>Could not load results. Try again.</AlertDescription>
+                  <AlertDescription>
+                    Could not load results. Try again.
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -355,5 +358,5 @@ export function RoutesPage({ onLogout }: Props) {
         )}
       </div>
     </AppLayout>
-  )
+  );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { TripMap } from '@/components/map/TripMap'
+import { RouteMap } from '@/components/map/RouteMap'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -151,9 +151,8 @@ export function TripsPage({ onLogout }: Props) {
   return (
     <AppLayout userEmail={userEmail} onLogout={onLogout} sidebar={sidebar}>
       <div className="flex-1 min-h-0">
-        <TripMap
+        <RouteMap
           points={tripPoints}
-          loading={pointsQuery.isFetching}
         />
       </div>
 

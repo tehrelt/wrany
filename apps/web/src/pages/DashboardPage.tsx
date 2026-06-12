@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { TrackingMap } from '@/components/map/TrackingMap'
+import { RouteMap } from '@/components/map/RouteMap'
 import { SummaryCards } from '@/components/tracking/SummaryCards'
 import { PointsTable } from '@/components/tracking/PointsTable'
 import { TrackingFilters, defaultFrom, defaultTo, defaultTrackSettings, type TrackDisplaySettings } from '@/features/tracking/TrackingFilters'
@@ -61,6 +61,14 @@ export function DashboardPage({ onLogout }: Props) {
 
   const segments = trackQuery.data ?? []
   const points = pointsQuery.data?.items ?? []
+  const mapPoints = segments.map(segment => ({
+    lat: segment.lat,
+    lon: segment.lon,
+    recordedAt: segment.recorded_at,
+  }))
+  const selectedSegment = selectedId
+    ? segments.find(segment => segment.event_id === selectedId)
+    : undefined
   const isLoading = trackQuery.isLoading || summaryQuery.isLoading
 
   let userEmail = ''
@@ -100,12 +108,17 @@ export function DashboardPage({ onLogout }: Props) {
       <SummaryCards summary={summaryQuery.data} loading={summaryQuery.isLoading} />
 
       <div className="flex-1 min-h-0">
-        <TrackingMap
-          segments={segments}
-          fitKey={`${filter.device_id ?? ''}|${filter.from}|${filter.to}`}
-          loading={trackQuery.isLoading}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+        <RouteMap
+          points={mapPoints}
+          selectedPoint={
+            selectedSegment
+              ? {
+                  lat: selectedSegment.lat,
+                  lon: selectedSegment.lon,
+                  recordedAt: selectedSegment.recorded_at,
+                }
+              : null
+          }
         />
       </div>
 

@@ -40,6 +40,7 @@ apps/android-tracker/src/api/generated/
 # Claude local/private files
 CLAUDE.local.md
 .claude/settings.local.json.env
+~/.claude-tg-approval/
 
 .serena/
 
