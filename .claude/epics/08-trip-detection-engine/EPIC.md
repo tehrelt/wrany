@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented
+Done
 
 ---
 
@@ -454,7 +454,7 @@ TripDetectionUseCase → domain.Trip (no external deps)
 
 ### Итог EPIC 08: Trip Detection Engine
 
-**Статус:** Implemented
+**Статус:** Done
 
 **Что реализовано:**
 
