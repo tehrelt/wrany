@@ -40,6 +40,12 @@ func (s *stubTrackingQueryRepo) DeletePoint(_ context.Context, _, _ string) erro
 	return s.err
 }
 
+func (s *stubTrackingQueryRepo) GetTrack(
+	_ context.Context, _ domain.TrackFilter,
+) ([]domain.TrackSegment, error) {
+	return nil, s.err
+}
+
 var (
 	now  = time.Now().UTC()
 	from = now.Add(-1 * time.Hour)

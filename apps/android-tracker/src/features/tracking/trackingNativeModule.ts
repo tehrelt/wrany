@@ -10,6 +10,7 @@ const { TrackingModule } = NativeModules as {
     ): Promise<void>;
     disableTracking(): Promise<void>;
     getTrackingStatus(): Promise<TrackingStatus>;
+    reconnectWs(): Promise<void>;
     flushNow(): Promise<void>;
     clearFailed(): Promise<void>;
     updateToken(token: string): Promise<void>;

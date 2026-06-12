@@ -3,8 +3,9 @@ WORKDIR /workspace
 
 # --- dependency layer (cached unless go.mod/go.sum change) ---
 COPY go.work go.work.sum ./
-COPY libs/events/go.mod   libs/events/go.mod
-COPY libs/eventbus/go.mod libs/eventbus/go.mod
+COPY libs/events/go.mod        libs/events/go.mod
+COPY libs/eventbus/go.mod      libs/eventbus/go.mod
+COPY libs/observability/go.mod libs/observability/go.mod
 COPY services/tracking-worker/go.mod services/tracking-worker/go.mod
 COPY services/tracking-worker/go.sum services/tracking-worker/go.sum
 
@@ -14,8 +15,9 @@ RUN go mod download
 
 # --- source layer ---
 WORKDIR /workspace
-COPY libs/events  ./libs/events
-COPY libs/eventbus ./libs/eventbus
+COPY libs/events        ./libs/events
+COPY libs/eventbus      ./libs/eventbus
+COPY libs/observability ./libs/observability
 COPY services/tracking-worker ./services/tracking-worker
 
 WORKDIR /workspace/services/tracking-worker

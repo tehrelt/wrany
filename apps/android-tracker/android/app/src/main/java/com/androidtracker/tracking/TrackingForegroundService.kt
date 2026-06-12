@@ -14,12 +14,14 @@ class TrackingForegroundService : Service() {
         private const val TAG = "TrackingService"
         const val ACTION_START = "com.androidtracker.tracking.START"
         const val ACTION_STOP = "com.androidtracker.tracking.STOP"
+        const val ACTION_RECONNECT = "com.androidtracker.tracking.RECONNECT"
 
         @Volatile var isRunning = false
         @Volatile var lastLocationTime: String? = null
         @Volatile private var senderRef: BatchSender? = null
 
         val wsConnected: Boolean get() = senderRef?.wsConnected ?: false
+        val wsLastError: String? get() = senderRef?.wsLastError
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -42,6 +44,7 @@ class TrackingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
+            ACTION_RECONNECT -> senderRef?.reconnectNow()
             else -> if (!isRunning) startTracking()
         }
         return START_STICKY

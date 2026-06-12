@@ -37,6 +37,9 @@ class BatchSender(
     @Volatile var wsConnected = false
         private set
 
+    @Volatile var wsLastError: String? = null
+        private set
+
     fun start() {
         connect()
         scheduleFlush()
@@ -52,6 +55,16 @@ class BatchSender(
 
     fun flush() {
         scope.launch { trySendBatch() }
+    }
+
+    fun reconnectNow() {
+        ws?.close(1000, "force reconnect")
+        ws = null
+        sessionAccepted.set(false)
+        wsConnected = false
+        wsLastError = null
+        reconnectAttempt = 0
+        connect()
     }
 
     private fun connect() {
@@ -104,7 +117,12 @@ class BatchSender(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log.w(TAG, "WS failure: ${t.message}")
+            val reason = buildString {
+                append(t.message ?: t.javaClass.simpleName)
+                if (response != null) append(" (HTTP ${response.code})")
+            }
+            Log.w(TAG, "WS failure: $reason")
+            wsLastError = reason
             wsConnected = false
             sessionAccepted.set(false)
             ws = null

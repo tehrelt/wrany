@@ -35,3 +35,36 @@ type TrackingSummary struct {
 	AvgSpeedMps     *float64
 	MaxSpeedMps     *float64
 }
+
+// TrackFilter holds query parameters for the simplified track endpoint.
+type TrackFilter struct {
+	UserID            string
+	DeviceID          string
+	From              time.Time
+	To                time.Time
+	SpeedThresholdMps float64 // points below this speed are "stationary" (default 2.0)
+	MinStaySec        int     // stay segments shorter than this are dropped (default 60)
+	MinMoveSec        int     // move segments shorter than this are reclassified as stationary (default 30)
+}
+
+type TrackSegmentKind string
+
+const (
+	TrackSegmentMove TrackSegmentKind = "move"
+	TrackSegmentStay TrackSegmentKind = "stay"
+)
+
+// TrackSegment is one element of a simplified track:
+// a single GPS point for move segments, or a centroid for stationary clusters.
+type TrackSegment struct {
+	Kind            TrackSegmentKind
+	EventID         string // empty for stay segments
+	RecordedAt      time.Time
+	PeriodEnd       time.Time
+	Lat             float64
+	Lon             float64
+	SpeedMps        *float64
+	AccuracyM       *float64
+	StayDurationSec int // seconds; 0 for move segments
+	MergedCount     int // raw points merged; 1 for move segments
+}

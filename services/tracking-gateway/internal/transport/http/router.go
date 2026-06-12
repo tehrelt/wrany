@@ -52,6 +52,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 	mux.Handle("GET /v1/me", auth(http.HandlerFunc(meH.GetMe)))
 	mux.Handle("GET /v1/tracking/points", auth(http.HandlerFunc(trackingQueryH.GetPoints)))
 	mux.Handle("GET /v1/tracking/summary", auth(http.HandlerFunc(trackingQueryH.GetSummary)))
+	mux.Handle("GET /v1/tracking/track", auth(http.HandlerFunc(trackingQueryH.GetTrack)))
 	mux.Handle("DELETE /v1/tracking/points/{event_id}", auth(http.HandlerFunc(trackingQueryH.DeletePoint)))
 	mux.Handle("GET /v1/trips", auth(http.HandlerFunc(tripH.ListTrips)))
 	mux.Handle("GET /v1/trips/{id}", auth(http.HandlerFunc(tripH.GetTrip)))

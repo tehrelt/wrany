@@ -1,4 +1,3 @@
-import { WS_URL } from '../config/env';
 import { BatchQueue } from './batchQueue';
 import {
   LocationBatchAckPayload,
@@ -23,12 +22,16 @@ export interface SocketCallbacks {
     rejected: Array<{ event_id: string; reason: string }>,
   ) => void;
   onError: (code: string, message: string) => void;
+  onDisconnect?: (code: number, reason: string) => void;
 }
+
+const CONNECT_TIMEOUT_MS = 8000;
 
 export class TrackerSocket {
   private ws: WebSocket | null = null;
   private deviceId = '';
   private sessionAccepted = false;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly queue: BatchQueue;
   private readonly callbacks: SocketCallbacks;
 
@@ -39,16 +42,28 @@ export class TrackerSocket {
     });
   }
 
-  connect(token: string, deviceId: string): void {
+  connect(token: string, deviceId: string, wsUrl: string): void {
     if (this.ws) return;
     this.deviceId = deviceId;
     this.callbacks.onStatusChange('connecting');
 
     // React Native Android WebSocket does not support custom headers on upgrade.
     // Pass token as query param — accepted by WSAuthMiddleware (EPIC 06, T02).
-    this.ws = new WebSocket(`${WS_URL}?access_token=${token}`);
+    this.ws = new WebSocket(`${wsUrl}?access_token=${token}`);
+
+    this.connectTimer = setTimeout(() => {
+      if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
+        this.ws.close();
+        this.callbacks.onDisconnect?.(1006, 'connect timeout (8s)');
+        this.ws = null;
+        this.sessionAccepted = false;
+        this.queue.stop();
+        this.callbacks.onStatusChange('disconnected');
+      }
+    }, CONNECT_TIMEOUT_MS);
 
     this.ws.onopen = () => {
+      this.clearConnectTimer();
       this.callbacks.onStatusChange('connected');
       this.sendSessionStart();
     };
@@ -62,7 +77,12 @@ export class TrackerSocket {
       this.callbacks.onError('WS_ERROR', msg);
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (e: Event) => {
+      this.clearConnectTimer();
+      const ev = e as unknown as { code?: number; reason?: string };
+      const code = ev.code ?? 1006;
+      const reason = ev.reason || closeCodeLabel(code);
+      this.callbacks.onDisconnect?.(code, reason);
       this.ws = null;
       this.sessionAccepted = false;
       this.queue.stop();
@@ -71,8 +91,16 @@ export class TrackerSocket {
   }
 
   disconnect(): void {
+    this.clearConnectTimer();
     this.queue.stop();
     this.ws?.close();
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer !== null) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
   }
 
   enqueue(event: LocationEvent): void {
@@ -146,5 +174,26 @@ export class TrackerSocket {
 
   get pendingCount(): number {
     return this.queue.pendingCount;
+  }
+}
+
+function closeCodeLabel(code: number): string {
+  switch (code) {
+    case 1000:
+      return 'normal closure';
+    case 1001:
+      return 'server going away';
+    case 1006:
+      return 'connection refused or network unreachable';
+    case 1008:
+      return 'policy violation';
+    case 1011:
+      return 'server error';
+    case 4001:
+      return 'unauthorized (invalid token)';
+    case 4003:
+      return 'forbidden';
+    default:
+      return `close code ${code}`;
   }
 }

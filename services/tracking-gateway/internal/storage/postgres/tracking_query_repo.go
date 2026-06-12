@@ -121,6 +121,132 @@ func (r *TrackingQueryRepo) DeletePoint(ctx context.Context, userID, eventID str
 	return nil
 }
 
+// GetTrack returns a simplified track: stationary clusters are collapsed into
+// a single centroid (kind="stay"), moving points are returned individually (kind="move").
+// Points with speed_mps < 0.5 m/s or activity_type = 'stationary' are treated as stationary.
+func (r *TrackingQueryRepo) GetTrack(
+	ctx context.Context,
+	f domain.TrackFilter,
+) ([]domain.TrackSegment, error) {
+	args := []any{f.UserID, f.From, f.To, f.SpeedThresholdMps}
+	argIdx := 5
+	deviceClause := ""
+	if f.DeviceID != "" {
+		deviceClause = "AND device_id = $" + strconv.Itoa(argIdx)
+		args = append(args, f.DeviceID)
+		argIdx++
+	}
+	minMoveArg := strconv.Itoa(argIdx)
+	args = append(args, f.MinMoveSec)
+	argIdx++
+	minStayArg := strconv.Itoa(argIdx)
+	args = append(args, f.MinStaySec)
+
+	// Two-pass island detection:
+	// Pass 1 — classify by speed threshold, group consecutive same-state runs.
+	// Pass 2 — reclassify move groups shorter than min_move_sec as stationary, re-group.
+	// Final — aggregate stay groups (with HAVING min_stay_sec), keep move points as-is.
+	query := `
+		WITH classified AS (
+			SELECT event_id, recorded_at, lat, lon, speed_mps, accuracy_m,
+				(COALESCE(speed_mps, 0) < $4 OR activity_type = 'stationary') AS is_stationary
+			FROM raw_location_points
+			WHERE user_id = $1 AND recorded_at >= $2 AND recorded_at <= $3 ` + deviceClause + `
+		),
+		bordered1 AS (
+			SELECT *,
+				(is_stationary IS DISTINCT FROM LAG(is_stationary) OVER (ORDER BY recorded_at)) AS is_border
+			FROM classified
+		),
+		grouped1 AS (
+			SELECT *,
+				SUM(is_border::int) OVER (ORDER BY recorded_at ROWS UNBOUNDED PRECEDING) AS grp
+			FROM bordered1
+		),
+		move_durations AS (
+			SELECT grp,
+				EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS dur_sec
+			FROM grouped1
+			WHERE NOT is_stationary
+			GROUP BY grp
+		),
+		reclassified AS (
+			SELECT g.*,
+				CASE
+					WHEN NOT g.is_stationary AND COALESCE(md.dur_sec, 0) < $` + minMoveArg + `
+						THEN true
+					ELSE g.is_stationary
+				END AS is_stationary2
+			FROM grouped1 g
+			LEFT JOIN move_durations md ON md.grp = g.grp
+		),
+		bordered2 AS (
+			SELECT *,
+				(is_stationary2 IS DISTINCT FROM LAG(is_stationary2) OVER (ORDER BY recorded_at)) AS is_border2
+			FROM reclassified
+		),
+		grouped2 AS (
+			SELECT *,
+				SUM(is_border2::int) OVER (ORDER BY recorded_at ROWS UNBOUNDED PRECEDING) AS grp2
+			FROM bordered2
+		)
+		SELECT 'stay'::text AS kind,
+			''::text AS event_id,
+			MIN(recorded_at) AS recorded_at,
+			MAX(recorded_at) AS period_end,
+			AVG(lat) AS lat, AVG(lon) AS lon,
+			NULL::float8 AS speed_mps, NULL::float8 AS accuracy_m,
+			EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS stay_duration_sec,
+			COUNT(*)::int AS merged_count
+		FROM grouped2
+		WHERE is_stationary2
+		GROUP BY grp2
+		HAVING EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int >= $` + minStayArg + `
+
+		UNION ALL
+
+		SELECT 'move'::text AS kind,
+			event_id::text,
+			recorded_at, recorded_at AS period_end,
+			lat, lon,
+			speed_mps, accuracy_m,
+			0::int AS stay_duration_sec,
+			1::int AS merged_count
+		FROM grouped2
+		WHERE NOT is_stationary2
+
+		ORDER BY recorded_at
+	`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	segments := make([]domain.TrackSegment, 0)
+	for rows.Next() {
+		var s domain.TrackSegment
+		var kindStr string
+		if err := rows.Scan(
+			&kindStr, &s.EventID,
+			&s.RecordedAt, &s.PeriodEnd,
+			&s.Lat, &s.Lon,
+			&s.SpeedMps, &s.AccuracyM,
+			&s.StayDurationSec, &s.MergedCount,
+		); err != nil {
+			return nil, err
+		}
+		s.Kind = domain.TrackSegmentKind(kindStr)
+		segments = append(segments, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return segments, nil
+}
+
 // GetSummary returns aggregated stats for the given filter.
 func (r *TrackingQueryRepo) GetSummary(
 	ctx context.Context,

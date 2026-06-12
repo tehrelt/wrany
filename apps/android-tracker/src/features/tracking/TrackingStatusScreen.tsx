@@ -25,6 +25,7 @@ const POLL_INTERVAL_MS = 3000;
 const INITIAL_STATUS: TrackingStatus = {
   serviceRunning: false,
   wsStatus: 'disconnected',
+  wsLastError: null,
   pendingCount: 0,
   failedCount: 0,
   lastLocationTime: null,
@@ -177,6 +178,16 @@ export function TrackingStatusScreen(): React.JSX.Element {
     }
   }
 
+  async function handleReconnectWs(): Promise<void> {
+    setError(null);
+    try {
+      await trackingModule.reconnectWs();
+      setTimeout(refreshStatus, 500);
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to reconnect');
+    }
+  }
+
   async function handleFlush(): Promise<void> {
     await trackingModule.flushNow();
   }
@@ -215,6 +226,9 @@ export function TrackingStatusScreen(): React.JSX.Element {
       <Section title="Service">
         <Row label="Running" value={status.serviceRunning ? 'yes' : 'no'} />
         <Row label="WS connection" value={status.wsStatus} />
+        {status.wsLastError && status.wsStatus !== 'connected' && (
+          <Row label="WS error" value={status.wsLastError} />
+        )}
         <Row label="Pending points" value={String(status.pendingCount)} />
         <Row label="Failed points" value={String(status.failedCount)} />
         <Row
@@ -238,6 +252,13 @@ export function TrackingStatusScreen(): React.JSX.Element {
             }
             onPress={status.serviceRunning ? handleDisable : handleEnable}
             disabled={busy}
+          />
+        </View>
+        <View style={styles.buttonRow}>
+          <Button
+            title="Reconnect WS"
+            onPress={handleReconnectWs}
+            disabled={!status.serviceRunning || status.wsStatus === 'connected'}
           />
         </View>
         <View style={styles.buttonRow}>

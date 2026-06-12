@@ -72,11 +72,25 @@ class TrackingModule(reactContext: ReactApplicationContext) :
                     putString("lastLocationTime", TrackingForegroundService.lastLocationTime)
                     putString("lastSyncTime", lastSync)
                     putString("wsStatus", wsStatus)
+                    putString("wsLastError", TrackingForegroundService.wsLastError)
                 }
                 promise.resolve(result)
             } catch (e: Exception) {
                 promise.reject("STATUS_ERROR", e.message ?: "unknown error", e)
             }
+        }
+    }
+
+    @ReactMethod
+    fun reconnectWs(promise: Promise) {
+        try {
+            val intent = Intent(reactApplicationContext, TrackingForegroundService::class.java).apply {
+                action = TrackingForegroundService.ACTION_RECONNECT
+            }
+            reactApplicationContext.startService(intent)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("RECONNECT_ERROR", e.message ?: "unknown error", e)
         }
     }
 

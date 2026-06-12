@@ -4,9 +4,10 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { clearTokens, getAccessToken } from '../storage/tokenStorage';
 import { AuthScreen } from '../screens/AuthScreen';
 import { TrackerScreen } from '../screens/TrackerScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 import { TrackingStatusScreen } from '../features/tracking/TrackingStatusScreen';
 
-type Tab = 'legacy' | 'background';
+type Tab = 'legacy' | 'background' | 'settings';
 
 export function App(): React.JSX.Element {
   const [token, setToken] = useState<string | null>(null);
@@ -58,13 +59,26 @@ export function App(): React.JSX.Element {
               Legacy WS
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === 'settings' && styles.activeTab]}
+            onPress={() => setTab('settings')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                tab === 'settings' && styles.activeTabText,
+              ]}
+            >
+              Settings
+            </Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.content}>
-          {tab === 'background' ? (
-            <TrackingStatusScreen />
-          ) : (
+          {tab === 'background' && <TrackingStatusScreen />}
+          {tab === 'legacy' && (
             <TrackerScreen onSessionExpired={handleSessionExpired} />
           )}
+          {tab === 'settings' && <SettingsScreen />}
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

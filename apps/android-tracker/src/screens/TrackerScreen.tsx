@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { AuthExpiredError, getValidToken } from '../api/httpClient';
 import { registerDevice } from '../api/deviceApi';
+import { apiUrlToWsUrl, getApiUrl } from '../storage/settingsStorage';
 import { getOrCreateDeviceId } from '../tracker/deviceId';
 import {
   makeSyntheticEvent,
@@ -32,6 +33,14 @@ interface Counters {
   rejected: number;
 }
 
+interface PointEntry {
+  event_id: string;
+  recorded_at: string;
+  lat: number;
+  lon: number;
+  accuracy_m: number;
+}
+
 export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
   const [deviceId, setDeviceId] = useState('');
   const [deviceRegistered, setDeviceRegistered] = useState(false);
@@ -48,6 +57,9 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
   const [pending, setPending] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastLocation, setLastLocation] = useState<string | null>(null);
+  const [wsUrl, setWsUrl] = useState<string | null>(null);
+  const [disconnectInfo, setDisconnectInfo] = useState<string | null>(null);
+  const [points, setPoints] = useState<PointEntry[]>([]);
 
   const socketRef = useRef<TrackerSocket | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -68,7 +80,11 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
   }, []);
 
   const callbacks: SocketCallbacks = {
-    onStatusChange: s => setWsStatus(s),
+    onStatusChange: s => {
+      setWsStatus(s);
+      if (s !== 'disconnected') setDisconnectInfo(null);
+    },
+    onDisconnect: (code, reason) => setDisconnectInfo(`${code}: ${reason}`),
     onAck: (accepted, duplicated, rejected) => {
       setCounters(c => ({
         accepted: c.accepted + accepted.length,
@@ -97,6 +113,10 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
   }
 
   async function handleConnect(): Promise<void> {
+    const resolvedWsUrl = apiUrlToWsUrl(await getApiUrl());
+    setWsUrl(resolvedWsUrl);
+    setDisconnectInfo(null);
+
     let currentToken: string;
     try {
       // getValidToken proactively refreshes if the stored token expires within 60s.
@@ -108,12 +128,18 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
     if (!socketRef.current) {
       socketRef.current = new TrackerSocket(callbacks);
     }
-    socketRef.current.connect(currentToken, deviceId);
+    socketRef.current.connect(currentToken, deviceId, resolvedWsUrl);
   }
 
   function handleDisconnect(): void {
     socketRef.current?.disconnect();
     socketRef.current = null;
+  }
+
+  async function handleReconnect(): Promise<void> {
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    await handleConnect();
   }
 
   async function handleStartTracking(): Promise<void> {
@@ -134,6 +160,16 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
             5,
           )} ±${event.accuracy_m.toFixed(0)}m`,
         );
+        setPoints(prev => [
+          {
+            event_id: event.event_id,
+            recorded_at: event.recorded_at,
+            lat: event.lat,
+            lon: event.lon,
+            accuracy_m: event.accuracy_m,
+          },
+          ...prev.slice(0, 49),
+        ]);
         socketRef.current?.enqueue(event);
         syncPending();
       },
@@ -170,6 +206,10 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
           value={deviceRegistered ? 'yes' : 'no'}
         />
         <Row label="WS status" value={wsStatus} />
+        {wsUrl && <Row label="WS url" value={wsUrl} mono />}
+        {disconnectInfo && wsStatus === 'disconnected' && (
+          <Row label="Disconnect reason" value={disconnectInfo} />
+        )}
         <Row label="GPS permission" value={gpsPermission} />
         {lastLocation && (
           <Row label="Last location" value={lastLocation} mono />
@@ -189,6 +229,22 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
         </View>
       )}
 
+      {points.length > 0 && (
+        <Section label={`Points (${points.length}/50)`}>
+          {points.map(p => (
+            <View key={p.event_id} style={s.pointRow}>
+              <Text style={s.pointTime}>
+                {new Date(p.recorded_at).toLocaleTimeString()}
+              </Text>
+              <Text style={s.pointCoords} numberOfLines={1}>
+                {p.lat.toFixed(5)}, {p.lon.toFixed(5)} ±
+                {p.accuracy_m.toFixed(0)}m
+              </Text>
+            </View>
+          ))}
+        </Section>
+      )}
+
       <Section label="Actions">
         <Btn
           label="Register Device"
@@ -201,6 +257,12 @@ export function TrackerScreen({ onSessionExpired }: Props): React.JSX.Element {
             wsStatus === 'disconnected' ? handleConnect : handleDisconnect
           }
           disabled={!deviceId}
+        />
+        <Btn
+          label="Reconnect"
+          onPress={handleReconnect}
+          disabled={!deviceId}
+          accent
         />
         <Btn
           label={tracking ? 'Stop Tracking' : 'Start Tracking'}
@@ -334,4 +396,11 @@ const s = StyleSheet.create({
   btnDisabled: { backgroundColor: '#d1d5db' },
   btnAccent: { backgroundColor: '#dc2626' },
   btnText: { color: '#fff', fontWeight: '600' },
+  pointRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    paddingVertical: 4,
+  },
+  pointTime: { fontSize: 11, color: '#6b7280' },
+  pointCoords: { fontSize: 12, color: '#111827', fontFamily: 'monospace' },
 });

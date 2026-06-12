@@ -3,6 +3,7 @@ export type WsStatus = 'disconnected' | 'connecting' | 'connected';
 export interface TrackingStatus {
   serviceRunning: boolean;
   wsStatus: WsStatus;
+  wsLastError: string | null;
   pendingCount: number;
   failedCount: number;
   lastLocationTime: string | null;
