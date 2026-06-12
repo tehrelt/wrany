@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Implemented
 
 ---
 
@@ -239,40 +239,40 @@ tracking-gateway:
 ## Tasks
 
 ### Phase 1: Data model
-- [ ] Migration 0006: CREATE TABLE routes
-- [ ] Migration 0007: CREATE TABLE route_trips
-- [ ] Verify migrations apply cleanly
+- [x] Migration 0006: CREATE TABLE routes
+- [x] Migration 0007: CREATE TABLE route_trips
+- [ ] Verify migrations apply cleanly (pending `make up`)
 
 ### Phase 2: tracking-worker
-- [ ] domain/route.go — types
-- [ ] usecase/route_matching.go — matching algorithm
-- [ ] usecase/route_matching_job.go — periodic runner
-- [ ] usecase/route_matching_test.go — unit tests
-- [ ] storage/postgres/route_repo.go — repository
-- [ ] storage/postgres/route_repo_test.go — integration tests
-- [ ] config/config.go — add RouteMatchingIntervalSec
-- [ ] app/app.go — wire RouteMatchingJob
+- [x] domain/route.go — types
+- [x] usecase/route_matching.go — matching algorithm
+- [x] usecase/route_matching_job.go — periodic runner
+- [x] usecase/route_matching_test.go — unit tests (10 pass)
+- [x] storage/postgres/route_repo.go — repository
+- [ ] storage/postgres/route_repo_test.go — integration tests (pending)
+- [x] config/config.go — add RouteMatchingIntervalSec
+- [x] app/app.go — wire RouteMatchingJob
 
 ### Phase 3: tracking-gateway
-- [ ] domain/route_query.go
-- [ ] usecase/route_query.go
-- [ ] storage/postgres/route_query_repo.go
-- [ ] transport/http/route_handler.go
-- [ ] transport/http/router.go — register /v1/routes
+- [x] domain/route_query.go
+- [x] usecase/route_query.go
+- [x] storage/postgres/route_query_repo.go
+- [x] transport/http/route_handler.go
+- [x] transport/http/router.go — register /v1/routes
 
 ### Phase 4: OpenAPI + codegen
-- [ ] swaggo annotations on route_handler.go
-- [ ] make swagger-gen
-- [ ] make ts-client
+- [x] swaggo annotations on route_handler.go
+- [x] make swagger-gen
+- [x] make ts-client (orval, local config)
 
 ### Phase 5: Web client
-- [ ] features/routes/ — routesApi, types, RouteMap
-- [ ] pages/RoutesPage.tsx
-- [ ] AppLayout — add Routes nav link
+- [x] features/routes/routesApi.ts
+- [x] pages/RoutesPage.tsx
+- [x] AppLayout — add Routes nav link
 
 ### Phase 6: Tests & verification
-- [ ] make test — all pass
-- [ ] Manual E2E flow
+- [x] make test — all pass (exit 0)
+- [ ] Manual E2E flow (pending live stack)
 
 ---
 
@@ -342,7 +342,47 @@ tracking-gateway:
 
 ## Implementation Log
 
-_Пусто — заполнять по мере реализации._
+### Phase 1 — Data model (2026-06-12)
+
+Migrations 0006 и 0007 созданы:
+- `routes` — с generated columns `start_geom`/`end_geom` для spatial index
+- `route_trips` — с UNIQUE (trip_id) для idempotency
+
+### Phase 2 — tracking-worker (2026-06-12)
+
+- `domain/route.go` — Route, RouteTrip, GeoPoint, RouteMatchConfig, DefaultRouteMatchConfig()
+- `usecase/route_matching.go` — pure algorithm: normalizePolyline, avgPointDistance, haversine, FindBestMatch
+- `usecase/route_matching_job.go` — periodic job, pattern from TripDetectionJob
+- `usecase/route_matching_test.go` — 10 unit tests, все прошли
+- `storage/postgres/route_repo.go` — RouteRepository: FindUnmatchedTrips (JOIN с raw_location_points для lat/lon), FindCandidateRoutes (ST_DWithin), FindRouteTemplate (ST_DumpPoints), InsertRoute (ST_GeomFromText WKT), InsertRouteTrip (ON CONFLICT DO NOTHING), IncrRouteStats
+- `config/config.go` — добавлен RouteMatchingIntervalSec (default 60s)
+- `app/app.go` — RouteMatchingJob wired рядом с TripDetectionJob
+
+Key insight: `trip_points` не содержит lat/lon — нужен JOIN с `raw_location_points`.
+
+### Phase 3 — tracking-gateway (2026-06-12)
+
+- `domain/route_query.go` — Route, RouteTrip, RoutePoint read models
+- `usecase/route_query.go` — RouteQueryUsecase с user isolation
+- `storage/postgres/route_query_repo.go` — cursor-based pagination, ST_DumpPoints для template polyline
+- `transport/http/route_handler.go` — 4 endpoints с swaggo аннотациями
+- `transport/http/swagger_types.go` — RouteItem, RouteTripItem, RoutePointItem, envelopes
+- `transport/http/router.go` — GET /v1/routes зарегистрированы
+- `app/app.go` — RouteQueryUsecase wired
+
+### Phase 4 — OpenAPI + codegen (2026-06-12)
+
+- `make swagger-gen` — успешно, RouteItem/RouteTripItem/RoutePointItem сгенерированы
+- Исправлен `make ts-client`: сломанный openapi-typescript → orval + orval.config.local.ts
+- `make ts-client` — успешно, `apps/web/src/api/generated/routes/` создан
+
+### Phase 5 — Web client (2026-06-12)
+
+- `features/routes/routesApi.ts` — listRoutes, getRoute, getRouteTrips, getRoutePoints
+- `pages/RoutesPage.tsx` — sidebar со списком routes, карта с template polyline, таблица trips
+- `AppLayout.tsx` — добавлен Routes nav link (Navigation icon)
+- `App.tsx` — добавлен /routes route
+- `make web-build` — успешно
 
 ---
 

@@ -190,3 +190,73 @@ type TripPointsEnv struct {
 	Data  TripPointsResponse `json:"data"`
 	Error *string            `json:"error"`
 }
+
+
+// RouteItem is a single route in list/detail responses.
+type RouteItem struct {
+	ID         string  `json:"id"`
+	UserID     string  `json:"user_id"`
+	Name       *string `json:"name"`
+	Status     string  `json:"status"`
+	StartLat   float64 `json:"start_lat"`
+	StartLon   float64 `json:"start_lon"`
+	EndLat     float64 `json:"end_lat"`
+	EndLon     float64 `json:"end_lon"`
+	DistanceM  float64 `json:"distance_m"`
+	TripsCount int     `json:"trips_count"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
+// RouteListResponse is the data payload for GET /v1/routes.
+type RouteListResponse struct {
+	Items      []RouteItem `json:"items"`
+	NextCursor *string     `json:"next_cursor"`
+}
+
+// RouteTripItem is a trip attached to a route.
+type RouteTripItem struct {
+	TripID      string  `json:"trip_id"`
+	MatchScore  float64 `json:"match_score"`
+	MatchedAt   string  `json:"matched_at"`
+	DurationSec int64   `json:"duration_sec"`
+	DistanceM   float64 `json:"distance_m"`
+	StartedAt   string  `json:"started_at"`
+	EndedAt     *string `json:"ended_at"`
+}
+
+// RouteTripListResponse is the data payload for GET /v1/routes/{id}/trips.
+type RouteTripListResponse struct {
+	Items      []RouteTripItem `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+}
+
+// RoutePointItem is a single GPS point of the route template polyline.
+type RoutePointItem struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
+// RouteEnv is the envelope for GET /v1/routes/{id}.
+type RouteEnv struct {
+	Data  RouteItem `json:"data"`
+	Error *string   `json:"error"`
+}
+
+// RouteListEnv is the envelope for GET /v1/routes.
+type RouteListEnv struct {
+	Data  RouteListResponse `json:"data"`
+	Error *string           `json:"error"`
+}
+
+// RouteTripListEnv is the envelope for GET /v1/routes/{id}/trips.
+type RouteTripListEnv struct {
+	Data  RouteTripListResponse `json:"data"`
+	Error *string               `json:"error"`
+}
+
+// RoutePointsEnv is the envelope for GET /v1/routes/{id}/points.
+type RoutePointsEnv struct {
+	Data  []RoutePointItem `json:"data"`
+	Error *string          `json:"error"`
+}
