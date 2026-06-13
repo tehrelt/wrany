@@ -5,123 +5,6 @@ import { getRouteBounds } from "./MapProvider";
 const SOURCE_ID = "route";
 const DEFAULT_CENTER: [number, number] = [37.618, 55.751];
 
-const DARK_STYLE = {
-  version: 8 as const,
-  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
-  sources: {
-    openmaptiles: {
-      type: "vector" as const,
-      url: "https://tiles.openfreemap.org/planet",
-    },
-  },
-  layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#0a0e14" } },
-    {
-      id: "water",
-      type: "fill",
-      source: "openmaptiles",
-      "source-layer": "water",
-      paint: { "fill-color": "#0c1828" },
-    },
-    {
-      id: "waterway",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "waterway",
-      paint: { "line-color": "#0d1c30", "line-width": 1 },
-    },
-    {
-      id: "landcover",
-      type: "fill",
-      source: "openmaptiles",
-      "source-layer": "landcover",
-      paint: { "fill-color": "#0d1419", "fill-opacity": 0.7 },
-    },
-    {
-      id: "landuse",
-      type: "fill",
-      source: "openmaptiles",
-      "source-layer": "landuse",
-      paint: { "fill-color": "#0e1520", "fill-opacity": 0.5 },
-    },
-    {
-      id: "building",
-      type: "fill",
-      source: "openmaptiles",
-      "source-layer": "building",
-      minzoom: 13,
-      paint: { "fill-color": "#141c2e", "fill-opacity": 0.9 },
-    },
-    {
-      id: "road-minor",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["in", ["get", "class"], ["literal", ["track", "path", "minor", "service"]]],
-      minzoom: 13,
-      paint: {
-        "line-color": "#1a2538",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 13, 0.5, 18, 2],
-      },
-    },
-    {
-      id: "road-secondary",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
-      minzoom: 10,
-      paint: {
-        "line-color": "#1e2c40",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 16, 3],
-      },
-    },
-    {
-      id: "road-primary",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["==", ["get", "class"], "primary"],
-      minzoom: 8,
-      paint: {
-        "line-color": "#2a3d58",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.5, 16, 4],
-      },
-    },
-    {
-      id: "road-motorway",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk"]]],
-      minzoom: 5,
-      paint: {
-        "line-color": "#314a6a",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 16, 5],
-      },
-    },
-    {
-      id: "place-city",
-      type: "symbol",
-      source: "openmaptiles",
-      "source-layer": "place",
-      filter: ["in", ["get", "class"], ["literal", ["city", "town"]]],
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 9, 12, 13],
-        "text-max-width": 8,
-        "text-anchor": "center",
-      },
-      paint: {
-        "text-color": "#4a6688",
-        "text-halo-color": "#0a0e14",
-        "text-halo-width": 1.5,
-      },
-    },
-  ],
-};
-
 function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
 
@@ -167,8 +50,7 @@ export class OpenFreeMapProvider implements MapProvider {
       container,
       center: DEFAULT_CENTER,
       zoom: 11,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      style: DARK_STYLE as any,
+      style: "https://tiles.openfreemap.org/styles/positron",
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -188,6 +70,8 @@ export class OpenFreeMapProvider implements MapProvider {
       this.destroy();
       return;
     }
+
+    this.applyDarkTheme();
 
     this.map.on("error", (event) => {
       options.onError(event.error?.message ?? "Map tile loading failed");
@@ -215,6 +99,48 @@ export class OpenFreeMapProvider implements MapProvider {
   destroy(): void {
     this.map?.remove();
     this.map = null;
+  }
+
+  private applyDarkTheme(): void {
+    if (!this.map) return;
+    const layers = this.map.getStyle()?.layers ?? [];
+
+    for (const layer of layers) {
+      const sl = (layer as { "source-layer"?: string })["source-layer"];
+
+      try {
+        if (layer.type === "background") {
+          this.map.setPaintProperty(layer.id, "background-color", "#0a0e14");
+        } else if (layer.type === "fill") {
+          if (sl === "water") {
+            this.map.setPaintProperty(layer.id, "fill-color", "#0c1828");
+            this.map.setPaintProperty(layer.id, "fill-opacity", 1);
+          } else if (sl === "building" || sl === "buildings") {
+            this.map.setPaintProperty(layer.id, "fill-color", "#141c2e");
+            this.map.setPaintProperty(layer.id, "fill-opacity", 0.9);
+          } else {
+            this.map.setPaintProperty(layer.id, "fill-color", "#0d1419");
+            this.map.setPaintProperty(layer.id, "fill-opacity", 0.6);
+          }
+        } else if (layer.type === "line") {
+          if (sl === "waterway") {
+            this.map.setPaintProperty(layer.id, "line-color", "#0e1e32");
+          } else {
+            this.map.setPaintProperty(layer.id, "line-color", "#1e2c40");
+          }
+        } else if (layer.type === "symbol") {
+          if (sl === "poi" || sl === "pois") {
+            this.map.setLayoutProperty(layer.id, "visibility", "none");
+          } else {
+            this.map.setPaintProperty(layer.id, "text-color", "#4a6688");
+            this.map.setPaintProperty(layer.id, "text-halo-color", "#0a0e14");
+            this.map.setPaintProperty(layer.id, "text-halo-width", 1.5);
+          }
+        }
+      } catch {
+        // skip layers where the property doesn't apply
+      }
+    }
   }
 
   private addLayers(): void {
