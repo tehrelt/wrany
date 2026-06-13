@@ -50,18 +50,58 @@ export class OpenFreeMapProvider implements MapProvider {
       container,
       center: DEFAULT_CENTER,
       zoom: 11,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "© OpenStreetMap contributors",
+          },
+        },
+        layers: [
+          {
+            id: "bg",
+            type: "background",
+            paint: { "background-color": "#080c12" },
+          },
+          {
+            id: "osm-dark",
+            type: "raster",
+            source: "osm",
+            paint: {
+              "raster-saturation": -0.95,
+              "raster-brightness-min": 0,
+              "raster-brightness-max": 0.22,
+              "raster-contrast": 0.5,
+              "raster-opacity": 1,
+            },
+          },
+        ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
     });
 
     await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.map?.off("load", onLoad);
+        this.map?.off("error", onInitialError);
+        reject(new Error("Map load timeout"));
+      }, 12_000);
+
       const onLoad = () => {
+        clearTimeout(timeout);
         this.map?.off("error", onInitialError);
         resolve();
       };
       const onInitialError = (event: { error?: Error }) => {
+        clearTimeout(timeout);
         this.map?.off("load", onLoad);
-        reject(event.error ?? new Error("OpenFreeMap failed to load"));
+        reject(event.error ?? new Error("Map failed to load"));
       };
+
       this.map?.once("load", onLoad);
       this.map?.once("error", onInitialError);
     });
@@ -70,8 +110,6 @@ export class OpenFreeMapProvider implements MapProvider {
       this.destroy();
       return;
     }
-
-    this.applyDarkTheme();
 
     this.map.on("error", (event) => {
       options.onError(event.error?.message ?? "Map tile loading failed");
@@ -101,48 +139,6 @@ export class OpenFreeMapProvider implements MapProvider {
     this.map = null;
   }
 
-  private applyDarkTheme(): void {
-    if (!this.map) return;
-    const layers = this.map.getStyle()?.layers ?? [];
-
-    for (const layer of layers) {
-      const sl = (layer as { "source-layer"?: string })["source-layer"];
-
-      try {
-        if (layer.type === "background") {
-          this.map.setPaintProperty(layer.id, "background-color", "#0a0e14");
-        } else if (layer.type === "fill") {
-          if (sl === "water") {
-            this.map.setPaintProperty(layer.id, "fill-color", "#0c1828");
-            this.map.setPaintProperty(layer.id, "fill-opacity", 1);
-          } else if (sl === "building" || sl === "buildings") {
-            this.map.setPaintProperty(layer.id, "fill-color", "#141c2e");
-            this.map.setPaintProperty(layer.id, "fill-opacity", 0.9);
-          } else {
-            this.map.setPaintProperty(layer.id, "fill-color", "#0d1419");
-            this.map.setPaintProperty(layer.id, "fill-opacity", 0.6);
-          }
-        } else if (layer.type === "line") {
-          if (sl === "waterway") {
-            this.map.setPaintProperty(layer.id, "line-color", "#0e1e32");
-          } else {
-            this.map.setPaintProperty(layer.id, "line-color", "#1e2c40");
-          }
-        } else if (layer.type === "symbol") {
-          if (sl === "poi" || sl === "pois") {
-            this.map.setLayoutProperty(layer.id, "visibility", "none");
-          } else {
-            this.map.setPaintProperty(layer.id, "text-color", "#4a6688");
-            this.map.setPaintProperty(layer.id, "text-halo-color", "#0a0e14");
-            this.map.setPaintProperty(layer.id, "text-halo-width", 1.5);
-          }
-        }
-      } catch {
-        // skip layers where the property doesn't apply
-      }
-    }
-  }
-
   private addLayers(): void {
     if (!this.map) return;
 
@@ -157,7 +153,20 @@ export class OpenFreeMapProvider implements MapProvider {
       source: SOURCE_ID,
       filter: ["==", ["get", "role"], "route"],
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#0d1a2e", "line-width": 9, "line-opacity": 0.9 },
+      paint: { "line-color": "#080c12", "line-width": 10, "line-opacity": 0.95 },
+    });
+    this.map.addLayer({
+      id: "route-glow-outer",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "route"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#39d353",
+        "line-width": 14,
+        "line-opacity": 0.1,
+        "line-blur": 8,
+      },
     });
     this.map.addLayer({
       id: "route-glow",
@@ -167,9 +176,9 @@ export class OpenFreeMapProvider implements MapProvider {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#39d353",
-        "line-width": 8,
-        "line-opacity": 0.22,
-        "line-blur": 5,
+        "line-width": 7,
+        "line-opacity": 0.28,
+        "line-blur": 4,
       },
     });
     this.map.addLayer({
@@ -183,7 +192,7 @@ export class OpenFreeMapProvider implements MapProvider {
 
     for (const [role, color, radius] of [
       ["start", "#39d353", 7],
-      ["finish", "#0d1a2e", 7],
+      ["finish", "#080c12", 7],
       ["selected", "#d88a08", 8],
     ] as const) {
       this.map.addLayer({
@@ -192,10 +201,10 @@ export class OpenFreeMapProvider implements MapProvider {
         source: SOURCE_ID,
         filter: ["==", ["get", "role"], role],
         paint: {
-          "circle-radius": radius + 6,
+          "circle-radius": radius + 7,
           "circle-color": color,
-          "circle-opacity": 0.2,
-          "circle-blur": 0.4,
+          "circle-opacity": 0.18,
+          "circle-blur": 0.5,
         },
       });
       this.map.addLayer({
@@ -207,7 +216,7 @@ export class OpenFreeMapProvider implements MapProvider {
           "circle-radius": radius,
           "circle-color": color,
           "circle-stroke-width": 2.5,
-          "circle-stroke-color": "#0a0e14",
+          "circle-stroke-color": "#080c12",
         },
       });
     }
