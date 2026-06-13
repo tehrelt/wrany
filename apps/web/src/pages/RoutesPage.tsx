@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Clock3, Gauge, Map, Route as RouteIcon, Trophy } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Clock3, Gauge, Route as RouteIcon, Trash2, Trophy } from 'lucide-react'
+import { toast } from 'sonner'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RouteMap } from '@/components/map/RouteMap'
 import {
@@ -13,8 +13,10 @@ import {
   SectionHeader,
   StatusBadge,
 } from '@/components/analytics/AnalyticsUi'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/useAuth'
 import {
+  deleteRoute,
   formatDistance,
   formatDuration,
   getRouteAttempts,
@@ -24,6 +26,7 @@ import {
   type Route,
   type TripAttemptItem,
 } from '@/features/routes/routesApi'
+import { useSelectedId } from '@/lib/useSelectedId'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -132,8 +135,27 @@ function Leaderboard({ attempts }: { attempts: TripAttemptItem[] }) {
 
 export function RoutesPage({ onLogout }: Props) {
   const { token } = useAuth()
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
+  const queryClient = useQueryClient()
+  const [selectedId, setSelectedId] = useSelectedId('route')
   const routesQuery = useQuery({ queryKey: ['routes'], queryFn: () => listRoutes({ limit: 50 }) })
+
+  const routes = routesQuery.data?.items ?? []
+  const selectedRoute = routes.find(route => route.id === selectedId) ?? null
+
+  const deleteMutation = useMutation({
+    mutationFn: (routeId: string) => deleteRoute(routeId),
+    onSuccess: () => {
+      toast.success('Circuit deleted')
+      setSelectedId(null)
+      void queryClient.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
+
+  function handleDelete(route: Route) {
+    if (window.confirm('Delete this circuit permanently? Recorded sessions are kept, only the circuit and its leaderboard are removed.')) {
+      deleteMutation.mutate(route.id)
+    }
+  }
   const resultsQuery = useQuery({
     queryKey: ['route-results', selectedRoute?.id],
     queryFn: () => getRouteResults(selectedRoute!.id),
@@ -150,7 +172,6 @@ export function RoutesPage({ onLogout }: Props) {
     enabled: Boolean(selectedRoute),
   })
 
-  const routes = routesQuery.data?.items ?? []
   const result = resultsQuery.data
   const best = result?.best
   const latest = result?.latest
@@ -164,7 +185,7 @@ export function RoutesPage({ onLogout }: Props) {
         {routesQuery.isLoading ? <div className="p-3"><LoadingSkeleton rows={5} /></div> : null}
         {routesQuery.isError ? <ErrorState title="Index unavailable" description="Route list failed to load." onRetry={() => routesQuery.refetch()} /> : null}
         {routes.map((route, index) => (
-          <RouteEntry key={route.id} route={route} position={index + 1} selected={selectedRoute?.id === route.id} onClick={() => setSelectedRoute(route)} />
+          <RouteEntry key={route.id} route={route} position={index + 1} selected={selectedRoute?.id === route.id} onClick={() => setSelectedId(route.id)} />
         ))}
       </div>
     </div>
@@ -211,8 +232,17 @@ export function RoutesPage({ onLogout }: Props) {
                   {attemptsQuery.data ? <Leaderboard attempts={attemptsQuery.data.items} /> : null}
                 </section>
               </div>
-              <div className="flex items-center gap-3 border border-dashed px-4 py-3 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
-                <Map className="size-4 text-primary" /> Route data remains read-only until mutation endpoints become available.
+              <div className="flex items-center justify-between gap-3 border border-dashed px-4 py-3 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+                <span>Deleting a circuit keeps its recorded sessions intact.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(selectedRoute)}
+                  disabled={deleteMutation.isPending}
+                  className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" /> Delete circuit
+                </Button>
               </div>
             </div>
           )}

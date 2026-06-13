@@ -378,6 +378,44 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the route and its trip-match links. The underlying trips are preserved.",
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Delete a route",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Route UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
             }
         },
         "/v1/routes/{id}/points": {
@@ -757,6 +795,64 @@
                 }
             }
         },
+        "/v1/tracking/track": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "Get simplified track: stationary clusters collapsed to a centroid",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.TrackEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/trips": {
             "get": {
                 "security": [
@@ -842,6 +938,44 @@
                         "schema": {
                             "$ref": "#/definitions/internal_transport_http.TripEnv"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the trip, its points and route matches. Routes seeded by this trip are removed too.",
+                "tags": [
+                    "trips"
+                ],
+                "summary": "Delete a trip and its detected data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trip UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "401": {
                         "description": "Unauthorized",
@@ -1310,6 +1444,70 @@
                 },
                 "error": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TrackEnv": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_transport_http.TrackResponse"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_transport_http.TrackResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http.TrackSegmentItem"
+                    }
+                }
+            }
+        },
+        "internal_transport_http.TrackSegmentItem": {
+            "type": "object",
+            "properties": {
+                "accuracy_m": {
+                    "type": "number"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "example": "stay"
+                },
+                "lat": {
+                    "type": "number",
+                    "example": 55.751244
+                },
+                "lon": {
+                    "type": "number",
+                    "example": 37.618423
+                },
+                "merged_count": {
+                    "type": "integer",
+                    "example": 180
+                },
+                "period_end": {
+                    "type": "string",
+                    "example": "2026-06-10T14:30:00Z"
+                },
+                "recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                },
+                "speed_mps": {
+                    "type": "number"
+                },
+                "stay_duration_sec": {
+                    "type": "integer",
+                    "example": 9000
                 }
             }
         },

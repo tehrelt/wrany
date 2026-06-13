@@ -144,6 +144,45 @@ func (r *TripQueryRepo) GetTrip(ctx context.Context, userID, tripID string) (dom
 	return t, nil
 }
 
+// DeleteTrip removes a trip owned by userID inside a transaction.
+//
+// The trips table is referenced by routes.first_trip_id / last_trip_id without
+// ON DELETE CASCADE, so any route seeded by this trip is removed first (which
+// cascades its route_trips links). Deleting the trip then cascades trip_points
+// and any remaining route_trips links. Returns usecase.ErrTripNotFound if the
+// trip does not exist or is not owned by userID.
+func (r *TripQueryRepo) DeleteTrip(ctx context.Context, userID, tripID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("trip_query_repo: begin delete trip: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM routes
+		 WHERE user_id = $2 AND (first_trip_id = $1 OR last_trip_id = $1)`,
+		tripID, userID,
+	); err != nil {
+		return fmt.Errorf("trip_query_repo: delete seeded routes: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM trips WHERE id = $1 AND user_id = $2`,
+		tripID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("trip_query_repo: delete trip: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return usecase.ErrTripNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("trip_query_repo: commit delete trip: %w", err)
+	}
+	return nil
+}
+
 // GetTripPoints returns paginated GPS points for a trip, ordered by recorded_at ASC.
 // Cursor is base64(recorded_at_rfc3339nano|event_id).
 // Points are joined from raw_location_points to obtain lat/lon.

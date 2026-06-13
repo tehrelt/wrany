@@ -128,6 +128,23 @@ func (r *RouteQueryRepo) GetRoute(ctx context.Context, routeID, userID string) (
 	return rt, nil
 }
 
+// DeleteRoute removes a route owned by userID. The route_trips links cascade,
+// but the underlying trips are preserved. Returns usecase.ErrRouteNotFound if
+// the route does not exist or is not owned by userID.
+func (r *RouteQueryRepo) DeleteRoute(ctx context.Context, routeID, userID string) error {
+	tag, err := r.db.Exec(ctx,
+		`DELETE FROM routes WHERE id = $1 AND user_id = $2`,
+		routeID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("route_query_repo: delete route: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return usecase.ErrRouteNotFound
+	}
+	return nil
+}
+
 func (r *RouteQueryRepo) ListRouteTrips(ctx context.Context, f domain.RouteTripFilter) ([]domain.RouteTrip, string, error) {
 	var cursorTime time.Time
 	var cursorID string

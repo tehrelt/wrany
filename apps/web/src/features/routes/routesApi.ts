@@ -1,4 +1,5 @@
 import { apiClient } from '@/api/client'
+import { getRoutes } from '@/api/generated/routes/routes'
 import { formatDistance, formatDuration } from '@/features/trips/tripsApi'
 import type {
   InternalTransportHttpRouteResultResponse as RouteResultResponse,
@@ -81,6 +82,10 @@ export async function getRoutePoints(routeId: string): Promise<RoutePoint[]> {
 export async function getRouteResults(routeId: string): Promise<RouteResultResponse> {
   const res = await apiClient.get<{ data: RouteResultResponse }>(`/v1/routes/${routeId}/results`)
   return res.data.data
+}
+
+export async function deleteRoute(routeId: string): Promise<void> {
+  await getRoutes().deleteV1RoutesId(routeId)
 }
 
 export interface RouteAttemptsResponse {

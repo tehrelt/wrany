@@ -50,6 +50,10 @@ func (m *mockRouteQueryRepoForResult) GetRoutePoints(_ context.Context, _, _ str
 	return nil, nil
 }
 
+func (m *mockRouteQueryRepoForResult) DeleteRoute(_ context.Context, _, _ string) error {
+	return m.err
+}
+
 // --- helpers ---
 
 func newResultUC(resultRepo usecase.RouteResultRepo, routeRepo usecase.RouteQueryRepo) *usecase.RouteResultQueryUsecase {

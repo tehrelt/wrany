@@ -21,6 +21,14 @@ COPY libs/observability ./libs/observability
 COPY services/tracking-gateway ./services/tracking-gateway
 
 WORKDIR /workspace/services/tracking-gateway
+# Regenerate the OpenAPI spec from handler annotations so the served
+# /swagger/doc.json always matches the built binary.
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
+RUN "$(go env GOPATH)/bin/swag" init \
+    -g cmd/tracking-gateway/main.go \
+    --outputTypes json,go \
+    --parseDependency \
+    --parseInternal
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/gateway ./cmd/tracking-gateway
 RUN CGO_ENABLED=0 GOOS=linux go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1 \
     && cp "$(go env GOPATH)/bin/migrate" /out/migrate

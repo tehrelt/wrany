@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Clock3, Gauge, MapPin, Route as RouteIcon, Satellite } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Clock3, Gauge, MapPin, Route as RouteIcon, Satellite, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RouteMap } from '@/components/map/RouteMap'
 import {
@@ -12,9 +13,11 @@ import {
   SectionHeader,
   StatusBadge,
 } from '@/components/analytics/AnalyticsUi'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuth } from '@/features/auth/useAuth'
-import { formatDistance, formatDuration, getTripPoints, listTrips, type Trip, type TripPoint } from '@/features/trips/tripsApi'
+import { deleteTrip, formatDistance, formatDuration, getTripPoints, listTrips, type Trip, type TripPoint } from '@/features/trips/tripsApi'
+import { useSelectedId } from '@/lib/useSelectedId'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -52,19 +55,38 @@ function SessionEntry({ trip, position, selected, onClick }: { trip: Trip; posit
 
 export function TripsPage({ onLogout }: Props) {
   const { token } = useAuth()
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState('all')
-  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null)
+  const [selectedId, setSelectedId] = useSelectedId('trip')
   const tripsQuery = useQuery({
     queryKey: ['trips', status],
     queryFn: () => listTrips({ status: status === 'all' ? undefined : status, limit: 50 }),
   })
+
+  const trips = tripsQuery.data?.items ?? []
+  const selectedTrip = trips.find(trip => trip.id === selectedId) ?? null
+
+  const deleteMutation = useMutation({
+    mutationFn: (tripId: string) => deleteTrip(tripId),
+    onSuccess: () => {
+      toast.success('Session deleted')
+      setSelectedId(null)
+      void queryClient.invalidateQueries({ queryKey: ['trips'] })
+      void queryClient.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
+
+  function handleDelete(trip: Trip) {
+    if (window.confirm('Delete this session permanently? Its trace and route matches will be removed.')) {
+      deleteMutation.mutate(trip.id)
+    }
+  }
   const pointsQuery = useQuery<{ items: TripPoint[] }>({
     queryKey: ['trip-points', selectedTrip?.id],
     queryFn: () => getTripPoints(selectedTrip!.id, { limit: 5000 }),
     enabled: Boolean(selectedTrip),
   })
 
-  const trips = tripsQuery.data?.items ?? []
   const points = pointsQuery.data?.items ?? []
   const averageSpeed = selectedTrip?.duration_sec ? selectedTrip.distance_m / selectedTrip.duration_sec : 0
   const sessionList = (
@@ -90,7 +112,7 @@ export function TripsPage({ onLogout }: Props) {
       <div className="border">
         {tripsQuery.isLoading ? <div className="p-3"><LoadingSkeleton rows={5} /></div> : null}
         {tripsQuery.isError ? <ErrorState title="Log unavailable" description="Sessions failed to load." onRetry={() => tripsQuery.refetch()} /> : null}
-        {trips.map((trip, index) => <SessionEntry key={trip.id} trip={trip} position={index + 1} selected={selectedTrip?.id === trip.id} onClick={() => setSelectedTrip(trip)} />)}
+        {trips.map((trip, index) => <SessionEntry key={trip.id} trip={trip} position={index + 1} selected={selectedTrip?.id === trip.id} onClick={() => setSelectedId(trip.id)} />)}
       </div>
     </div>
   )
@@ -104,6 +126,18 @@ export function TripsPage({ onLogout }: Props) {
             <EmptyState title="Select a session" description="Choose an automatically detected run to inspect its telemetry trace." />
           ) : (
             <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <SectionHeader title={formatDate(selectedTrip.started_at)} description="Detected session" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(selectedTrip)}
+                  disabled={deleteMutation.isPending}
+                  className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" /> Delete session
+                </Button>
+              </div>
               <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
                 <MetricCard icon={<RouteIcon className="size-3.5" />} label="Distance" value={formatDistance(selectedTrip.distance_m)} detail="Detected route length" />
                 <MetricCard icon={<Clock3 className="size-3.5" />} label="Elapsed" value={formatDuration(selectedTrip.duration_sec)} detail="Start to finish" />

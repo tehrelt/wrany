@@ -129,6 +129,44 @@ func (h *TripHandler) GetTrip(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tripToItem(trip))
 }
 
+// DeleteTrip godoc
+// @Summary      Delete a trip and its detected data
+// @Description  Removes the trip, its points and route matches. Routes seeded by this trip are removed too.
+// @Tags         trips
+// @Param        id  path  string  true  "Trip UUID"
+// @Success      204
+// @Failure      401  {object}  ApiError
+// @Failure      404  {object}  ApiError
+// @Security     BearerAuth
+// @Router       /v1/trips/{id} [delete]
+func (h *TripHandler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
+	userID, ok := UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	tripID := r.PathValue("id")
+	if tripID == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	if err := h.uc.DeleteTrip(r.Context(), usecase.GetTripInput{
+		UserID: userID.String(),
+		TripID: tripID,
+	}); err != nil {
+		if errors.Is(err, usecase.ErrTripNotFound) {
+			writeError(w, http.StatusNotFound, "trip not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetTripPoints godoc
 // @Summary      Get GPS points for a trip (polyline)
 // @Tags         trips
