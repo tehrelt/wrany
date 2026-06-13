@@ -28,7 +28,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.HealthzEnv"
+                            "$ref": "#/definitions/http.HealthzEnv"
                         }
                     }
                 }
@@ -53,7 +53,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.LoginReq"
+                            "$ref": "#/definitions/http.LoginReq"
                         }
                     }
                 ],
@@ -61,19 +61,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -98,7 +98,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RefreshReq"
+                            "$ref": "#/definitions/http.RefreshReq"
                         }
                     }
                 ],
@@ -106,19 +106,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -143,7 +143,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RegisterReq"
+                            "$ref": "#/definitions/http.RegisterReq"
                         }
                     }
                 ],
@@ -151,25 +151,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TokenPairEnv"
+                            "$ref": "#/definitions/http.TokenPairEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -193,13 +193,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.DevicesEnv"
+                            "$ref": "#/definitions/http.DevicesEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -229,7 +229,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RegisterDeviceReq"
+                            "$ref": "#/definitions/http.RegisterDeviceReq"
                         }
                     }
                 ],
@@ -237,25 +237,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.DeviceEnv"
+                            "$ref": "#/definitions/http.DeviceEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -279,13 +279,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.MeEnv"
+                            "$ref": "#/definitions/http.MeEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -329,13 +329,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RouteListEnv"
+                            "$ref": "#/definitions/http.RouteListEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -368,19 +368,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RouteEnv"
+                            "$ref": "#/definitions/http.RouteEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -412,13 +412,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -451,19 +451,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RoutePointsEnv"
+                            "$ref": "#/definitions/http.RoutePointsEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -508,25 +508,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RouteTripListEnv"
+                            "$ref": "#/definitions/http.RouteTripListEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -571,19 +571,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RouteAttemptListEnv"
+                            "$ref": "#/definitions/http.RouteAttemptListEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -616,19 +616,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.RouteResultEnv"
+                            "$ref": "#/definitions/http.RouteResultEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -686,19 +686,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TrackingPointsEnv"
+                            "$ref": "#/definitions/http.TrackingPointsEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -731,13 +731,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -783,19 +783,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TrackingSummaryEnv"
+                            "$ref": "#/definitions/http.TrackingSummaryEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -841,19 +841,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TrackEnv"
+                            "$ref": "#/definitions/http.TrackEnv"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -903,13 +903,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TripListEnv"
+                            "$ref": "#/definitions/http.TripListEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -942,19 +942,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TripEnv"
+                            "$ref": "#/definitions/http.TripEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -986,13 +986,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -1037,19 +1037,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.TripPointsEnv"
+                            "$ref": "#/definitions/http.TripPointsEnv"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http.ApiError"
+                            "$ref": "#/definitions/http.ApiError"
                         }
                     }
                 }
@@ -1057,7 +1057,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal_transport_http.ApiError": {
+        "http.ApiError": {
             "type": "object",
             "properties": {
                 "data": {
@@ -1069,7 +1069,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.Device": {
+        "http.Device": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -1092,24 +1092,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.DeviceEnv": {
+        "http.DeviceEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.Device"
+                    "$ref": "#/definitions/http.Device"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.DevicesEnv": {
+        "http.DevicesEnv": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.Device"
+                        "$ref": "#/definitions/http.Device"
                     }
                 },
                 "error": {
@@ -1117,7 +1117,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.Healthz": {
+        "http.Healthz": {
             "type": "object",
             "properties": {
                 "status": {
@@ -1126,18 +1126,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.HealthzEnv": {
+        "http.HealthzEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.Healthz"
+                    "$ref": "#/definitions/http.Healthz"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.LoginReq": {
+        "http.LoginReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -1148,7 +1148,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.Me": {
+        "http.Me": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -1162,18 +1162,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.MeEnv": {
+        "http.MeEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.Me"
+                    "$ref": "#/definitions/http.Me"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RefreshReq": {
+        "http.RefreshReq": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -1181,7 +1181,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RegisterDeviceReq": {
+        "http.RegisterDeviceReq": {
             "type": "object",
             "properties": {
                 "device_id": {
@@ -1198,7 +1198,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RegisterReq": {
+        "http.RegisterReq": {
             "type": "object",
             "properties": {
                 "email": {
@@ -1211,24 +1211,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteAttemptListEnv": {
+        "http.RouteAttemptListEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.RouteAttemptListResponse"
+                    "$ref": "#/definitions/http.RouteAttemptListResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteAttemptListResponse": {
+        "http.RouteAttemptListResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.TripAttemptItem"
+                        "$ref": "#/definitions/http.TripAttemptItem"
                     }
                 },
                 "next_cursor": {
@@ -1236,18 +1236,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteEnv": {
+        "http.RouteEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.RouteItem"
+                    "$ref": "#/definitions/http.RouteItem"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteItem": {
+        "http.RouteItem": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -1288,24 +1288,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteListEnv": {
+        "http.RouteListEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.RouteListResponse"
+                    "$ref": "#/definitions/http.RouteListResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteListResponse": {
+        "http.RouteListResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.RouteItem"
+                        "$ref": "#/definitions/http.RouteItem"
                     }
                 },
                 "next_cursor": {
@@ -1313,7 +1313,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RoutePointItem": {
+        "http.RoutePointItem": {
             "type": "object",
             "properties": {
                 "lat": {
@@ -1324,13 +1324,13 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RoutePointsEnv": {
+        "http.RoutePointsEnv": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.RoutePointItem"
+                        "$ref": "#/definitions/http.RoutePointItem"
                     }
                 },
                 "error": {
@@ -1338,7 +1338,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteResultComparisonItem": {
+        "http.RouteResultComparisonItem": {
             "type": "object",
             "properties": {
                 "latest_vs_best_percent": {
@@ -1349,38 +1349,38 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteResultEnv": {
+        "http.RouteResultEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.RouteResultResponse"
+                    "$ref": "#/definitions/http.RouteResultResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteResultResponse": {
+        "http.RouteResultResponse": {
             "type": "object",
             "properties": {
                 "attempts_count": {
                     "type": "integer"
                 },
                 "best": {
-                    "$ref": "#/definitions/internal_transport_http.TripResultItem"
+                    "$ref": "#/definitions/http.TripResultItem"
                 },
                 "comparison": {
-                    "$ref": "#/definitions/internal_transport_http.RouteResultComparisonItem"
+                    "$ref": "#/definitions/http.RouteResultComparisonItem"
                 },
                 "latest": {
-                    "$ref": "#/definitions/internal_transport_http.TripResultItem"
+                    "$ref": "#/definitions/http.TripResultItem"
                 },
                 "route_id": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteTripItem": {
+        "http.RouteTripItem": {
             "type": "object",
             "properties": {
                 "distance_m": {
@@ -1406,24 +1406,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.RouteTripListEnv": {
+        "http.RouteTripListEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.RouteTripListResponse"
+                    "$ref": "#/definitions/http.RouteTripListResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.RouteTripListResponse": {
+        "http.RouteTripListResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.RouteTripItem"
+                        "$ref": "#/definitions/http.RouteTripItem"
                     }
                 },
                 "next_cursor": {
@@ -1431,7 +1431,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TokenPair": {
+        "http.TokenPair": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -1442,40 +1442,40 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TokenPairEnv": {
+        "http.TokenPairEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TokenPair"
+                    "$ref": "#/definitions/http.TokenPair"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TrackEnv": {
+        "http.TrackEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TrackResponse"
+                    "$ref": "#/definitions/http.TrackResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TrackResponse": {
+        "http.TrackResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.TrackSegmentItem"
+                        "$ref": "#/definitions/http.TrackSegmentItem"
                     }
                 }
             }
         },
-        "internal_transport_http.TrackSegmentItem": {
+        "http.TrackSegmentItem": {
             "type": "object",
             "properties": {
                 "accuracy_m": {
@@ -1508,6 +1508,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2026-06-10T12:00:01Z"
                 },
+                "segment_id": {
+                    "type": "integer",
+                    "example": 2
+                },
                 "speed_mps": {
                     "type": "number"
                 },
@@ -1517,7 +1521,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TrackingPoint": {
+        "http.TrackingPoint": {
             "type": "object",
             "properties": {
                 "accuracy_m": {
@@ -1554,24 +1558,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TrackingPointsEnv": {
+        "http.TrackingPointsEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TrackingPointsResponse"
+                    "$ref": "#/definitions/http.TrackingPointsResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TrackingPointsResponse": {
+        "http.TrackingPointsResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.TrackingPoint"
+                        "$ref": "#/definitions/http.TrackingPoint"
                     }
                 },
                 "next_cursor": {
@@ -1579,7 +1583,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TrackingSummary": {
+        "http.TrackingSummary": {
             "type": "object",
             "properties": {
                 "avg_speed_mps": {
@@ -1606,18 +1610,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TrackingSummaryEnv": {
+        "http.TrackingSummaryEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TrackingSummary"
+                    "$ref": "#/definitions/http.TrackingSummary"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TripAttemptItem": {
+        "http.TripAttemptItem": {
             "type": "object",
             "properties": {
                 "avg_speed_mps": {
@@ -1646,18 +1650,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TripEnv": {
+        "http.TripEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TripItem"
+                    "$ref": "#/definitions/http.TripItem"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TripItem": {
+        "http.TripItem": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -1716,24 +1720,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TripListEnv": {
+        "http.TripListEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TripListResponse"
+                    "$ref": "#/definitions/http.TripListResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TripListResponse": {
+        "http.TripListResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.TripItem"
+                        "$ref": "#/definitions/http.TripItem"
                     }
                 },
                 "next_cursor": {
@@ -1741,7 +1745,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TripPointItem": {
+        "http.TripPointItem": {
             "type": "object",
             "properties": {
                 "event_id": {
@@ -1764,24 +1768,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TripPointsEnv": {
+        "http.TripPointsEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_transport_http.TripPointsResponse"
+                    "$ref": "#/definitions/http.TripPointsResponse"
                 },
                 "error": {
                     "type": "string"
                 }
             }
         },
-        "internal_transport_http.TripPointsResponse": {
+        "http.TripPointsResponse": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_transport_http.TripPointItem"
+                        "$ref": "#/definitions/http.TripPointItem"
                     }
                 },
                 "next_cursor": {
@@ -1789,7 +1793,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http.TripResultItem": {
+        "http.TripResultItem": {
             "type": "object",
             "properties": {
                 "avg_speed_mps": {

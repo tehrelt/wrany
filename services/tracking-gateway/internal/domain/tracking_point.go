@@ -58,6 +58,7 @@ const (
 // a single GPS point for move segments, or a centroid for stationary clusters.
 type TrackSegment struct {
 	Kind            TrackSegmentKind
+	SegmentID       int
 	EventID         string // empty for stay segments
 	RecordedAt      time.Time
 	PeriodEnd       time.Time

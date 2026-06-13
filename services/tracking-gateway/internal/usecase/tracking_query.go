@@ -42,10 +42,10 @@ type GetPointsInput struct {
 }
 
 var (
-	ErrFromRequired    = errors.New("from is required")
-	ErrToRequired      = errors.New("to is required")
-	ErrInvalidRange    = errors.New("from must be before to")
-	ErrRangeTooLarge   = errors.New("time range must not exceed 31 days")
+	ErrFromRequired  = errors.New("from is required")
+	ErrToRequired    = errors.New("to is required")
+	ErrInvalidRange  = errors.New("from must be before to")
+	ErrRangeTooLarge = errors.New("time range must not exceed 31 days")
 )
 
 func (u *TrackingQueryUsecase) GetPoints(ctx context.Context, in GetPointsInput) ([]domain.TrackingPoint, string, error) {
@@ -116,26 +116,26 @@ type GetTrackInput struct {
 	DeviceID          string
 	From              time.Time
 	To                time.Time
-	SpeedThresholdMps float64 // 0 → use default
-	MinStaySec        int     // 0 → use default
-	MinMoveSec        int     // 0 → use default
+	SpeedThresholdMps *float64
+	MinStaySec        *int
+	MinMoveSec        *int
 }
 
 func (u *TrackingQueryUsecase) GetTrack(ctx context.Context, in GetTrackInput) ([]domain.TrackSegment, error) {
 	if err := validateRange(in.From, in.To); err != nil {
 		return nil, err
 	}
-	threshold := in.SpeedThresholdMps
-	if threshold <= 0 {
-		threshold = defaultSpeedThresholdMps
+	threshold := defaultSpeedThresholdMps
+	if in.SpeedThresholdMps != nil && *in.SpeedThresholdMps >= 0 {
+		threshold = *in.SpeedThresholdMps
 	}
-	minStay := in.MinStaySec
-	if minStay <= 0 {
-		minStay = defaultMinStaySec
+	minStay := defaultMinStaySec
+	if in.MinStaySec != nil && *in.MinStaySec >= 0 {
+		minStay = *in.MinStaySec
 	}
-	minMove := in.MinMoveSec
-	if minMove <= 0 {
-		minMove = defaultMinMoveSec
+	minMove := defaultMinMoveSec
+	if in.MinMoveSec != nil && *in.MinMoveSec >= 0 {
+		minMove = *in.MinMoveSec
 	}
 	return u.repo.GetTrack(ctx, domain.TrackFilter{
 		UserID:            in.UserID,

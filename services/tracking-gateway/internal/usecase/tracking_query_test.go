@@ -19,7 +19,8 @@ type stubTrackingQueryRepo struct {
 	summary domain.TrackingSummary
 	err     error
 
-	capturedFilter domain.TrackingPointFilter
+	capturedFilter      domain.TrackingPointFilter
+	capturedTrackFilter domain.TrackFilter
 }
 
 func (s *stubTrackingQueryRepo) GetPoints(
@@ -41,8 +42,9 @@ func (s *stubTrackingQueryRepo) DeletePoint(_ context.Context, _, _ string) erro
 }
 
 func (s *stubTrackingQueryRepo) GetTrack(
-	_ context.Context, _ domain.TrackFilter,
+	_ context.Context, f domain.TrackFilter,
 ) ([]domain.TrackSegment, error) {
+	s.capturedTrackFilter = f
 	return nil, s.err
 }
 
@@ -140,4 +142,34 @@ func TestGetSummary_ValidationErrors(t *testing.T) {
 		UserID: "u1", From: from,
 	})
 	assert.ErrorIs(t, err, usecase.ErrToRequired)
+}
+
+func TestGetTrack_DefaultsMissingSettings(t *testing.T) {
+	stub := &stubTrackingQueryRepo{}
+	uc := usecase.NewTrackingQueryUsecase(stub)
+
+	_, err := uc.GetTrack(context.Background(), usecase.GetTrackInput{
+		UserID: "u1", From: from, To: to,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2.0, stub.capturedTrackFilter.SpeedThresholdMps)
+	assert.Equal(t, 60, stub.capturedTrackFilter.MinStaySec)
+	assert.Equal(t, 30, stub.capturedTrackFilter.MinMoveSec)
+}
+
+func TestGetTrack_AllowsZeroDurations(t *testing.T) {
+	stub := &stubTrackingQueryRepo{}
+	uc := usecase.NewTrackingQueryUsecase(stub)
+	threshold, zero := 0.5, 0
+
+	_, err := uc.GetTrack(context.Background(), usecase.GetTrackInput{
+		UserID: "u1", From: from, To: to,
+		SpeedThresholdMps: &threshold,
+		MinStaySec:        &zero,
+		MinMoveSec:        &zero,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0.5, stub.capturedTrackFilter.SpeedThresholdMps)
+	assert.Zero(t, stub.capturedTrackFilter.MinStaySec)
+	assert.Zero(t, stub.capturedTrackFilter.MinMoveSec)
 }
