@@ -13,7 +13,7 @@ type LocationValidator interface {
 }
 
 type OutlierDetector interface {
-	Detect(*domain.ProcessedLocationPoint, domain.RawLocationPoint) (float64, bool)
+	Detect(previous *domain.ProcessedLocationPoint, current domain.RawLocationPoint, next *domain.RawLocationPoint) (float64, bool)
 }
 
 type LocationSmoother interface {
@@ -64,8 +64,13 @@ func (p *Pipeline) ProcessBatch(history []domain.ProcessedLocationPoint, raw []d
 
 	window := acceptedOnly(history)
 	result := BatchResult{}
-	for _, point := range points {
-		processed := p.processOne(window, point, processedThrough, now)
+	for index := range points {
+		point := points[index]
+		var next *domain.RawLocationPoint
+		if index+1 < len(points) {
+			next = &points[index+1]
+		}
+		processed := p.processOne(window, point, next, processedThrough, now)
 		result.Processed = append(result.Processed, processed)
 		if processed.IsAccepted {
 			window = append(window, processed)
@@ -100,7 +105,7 @@ func markStationaryWindow(result *BatchResult, since time.Time) {
 	}
 }
 
-func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domain.RawLocationPoint, processedThrough *time.Time, now time.Time) domain.ProcessedLocationPoint {
+func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domain.RawLocationPoint, next *domain.RawLocationPoint, processedThrough *time.Time, now time.Time) domain.ProcessedLocationPoint {
 	out := domain.ProcessedLocationPoint{
 		UserID: raw.UserID, DeviceID: raw.DeviceID, EventID: raw.EventID,
 		RawLat: raw.Lat, RawLon: raw.Lon, AccuracyM: raw.AccuracyM,
@@ -122,7 +127,7 @@ func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domai
 	if len(history) > 0 {
 		previous = &history[len(history)-1]
 	}
-	implied, isOutlier := p.outlier.Detect(previous, raw)
+	implied, isOutlier := p.outlier.Detect(previous, raw, next)
 	out.ImpliedSpeedMps = implied
 	if isOutlier {
 		out.IsOutlier = true
@@ -143,13 +148,22 @@ func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domai
 		switch {
 		case gap > time.Duration(p.cfg.SegmentMaxGapSec)*time.Second:
 			// New segment after a long gap: do not attribute distance across it.
+			// This point becomes the next anchor (it is neither jitter nor
+			// stationary), so distance restarts fresh on the other side of the gap.
 			out.NoiseReason = domain.NoiseSegmentBreak
 		default:
-			// Distance and jitter are decided on the RAW track. Measuring distance
-			// on the smoothed track makes the moving average lag drop real walking
-			// below the jitter radius, silently losing the trip.
-			distance := HaversineM(previous.RawLat, previous.RawLon, raw.Lat, raw.Lon)
-			radius := clamp((previous.AccuracyM+raw.AccuracyM)/2, p.cfg.NoiseMinRadiusM, p.cfg.NoiseMaxRadiusM)
+			// Distance and jitter are decided on the RAW track against the last
+			// position-establishing anchor, not the immediately previous sample.
+			// At high sample rates every step is shorter than the jitter radius,
+			// so per-sample gating marks real walking as jitter and silently loses
+			// the whole trip. Accumulating displacement from a fixed anchor keeps
+			// the distance while still suppressing in-place GPS dithering.
+			anchor := lastAnchor(history)
+			if anchor == nil {
+				anchor = previous
+			}
+			distance := HaversineM(anchor.RawLat, anchor.RawLon, raw.Lat, raw.Lon)
+			radius := clamp((anchor.AccuracyM+raw.AccuracyM)/2, p.cfg.NoiseMinRadiusM, p.cfg.NoiseMaxRadiusM)
 			if distance < radius {
 				out.NoiseReason = domain.NoiseJitter
 			} else {
@@ -188,7 +202,19 @@ func (v Validator) Validate(point domain.RawLocationPoint) domain.NoiseReason {
 
 type SpeedOutlierDetector struct{ Config domain.NoiseConfig }
 
-func (d SpeedOutlierDetector) Detect(previous *domain.ProcessedLocationPoint, current domain.RawLocationPoint) (float64, bool) {
+// Detect returns the implied speed from the previous anchor to current and
+// whether current is a teleport outlier.
+//
+// A single high-speed sample is ambiguous: it can be a one-off GPS spike OR the
+// onset of real travel faster than walking. Because the Android client currently
+// always reports activity "unknown" (so maxSpeed falls back to the walking
+// ceiling), treating every faster-than-walking sample as a teleport drops whole
+// bus/car rides. We disambiguate with the next sample:
+//   - speed within the activity ceiling                     -> accept;
+//   - speed above the absolute vehicle ceiling              -> teleport (impossible);
+//   - in between, the next sample keeps progressing away    -> real travel, accept;
+//   - in between, the next sample snaps back to the anchor  -> spike, teleport.
+func (d SpeedOutlierDetector) Detect(previous *domain.ProcessedLocationPoint, current domain.RawLocationPoint, next *domain.RawLocationPoint) (float64, bool) {
 	if previous == nil {
 		return 0, false
 	}
@@ -196,8 +222,21 @@ func (d SpeedOutlierDetector) Detect(previous *domain.ProcessedLocationPoint, cu
 	if elapsed <= 0 {
 		return 0, true
 	}
-	speed := HaversineM(previous.RawLat, previous.RawLon, current.Lat, current.Lon) / elapsed
-	return speed, speed > d.maxSpeed(current.ActivityType)
+	distPC := HaversineM(previous.RawLat, previous.RawLon, current.Lat, current.Lon)
+	speed := distPC / elapsed
+	if speed <= d.maxSpeed(current.ActivityType) {
+		return speed, false
+	}
+	if speed > d.Config.VehicleMaxSpeedMps {
+		return speed, true // physically impossible jump: always a teleport
+	}
+	if next == nil {
+		return speed, false // cannot disprove sustained travel under the vehicle ceiling
+	}
+	// Sustained travel advances: next is at least as far from the anchor as current.
+	// An out-and-back spike collapses back toward the anchor.
+	distPN := HaversineM(previous.RawLat, previous.RawLon, next.Lat, next.Lon)
+	return speed, distPN < distPC
 }
 
 func (d SpeedOutlierDetector) maxSpeed(activity string) float64 {
@@ -282,6 +321,21 @@ func (a WindowMovementAnalyzer) Analyze(window []domain.ProcessedLocationPoint) 
 		}
 	}
 	return good >= a.Config.MovementGoodPoints
+}
+
+// lastAnchor returns the most recent accepted point that established a real
+// position: it skips jitter and stationary points so that a run of sub-radius
+// steps is measured against the last point that actually moved the device,
+// letting small steps accumulate into real displacement.
+func lastAnchor(history []domain.ProcessedLocationPoint) *domain.ProcessedLocationPoint {
+	for index := len(history) - 1; index >= 0; index-- {
+		switch history[index].NoiseReason {
+		case domain.NoiseJitter, domain.NoiseStationary:
+			continue
+		}
+		return &history[index]
+	}
+	return nil
 }
 
 func acceptedOnly(points []domain.ProcessedLocationPoint) []domain.ProcessedLocationPoint {

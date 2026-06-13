@@ -11,7 +11,14 @@ import (
 // trigger reprocessing of previously stored processed_location_points rows.
 // v2: distance/jitter measured on the raw track (not the smoothed one) and
 // distance is not attributed across a SegmentMaxGapSec time gap.
-const CurrentAlgorithmVersion int16 = 2
+// v3: distance/jitter measured against the last position-establishing anchor
+// instead of the previous sample, so high-frequency walking (steps shorter than
+// the jitter radius) accumulates real displacement instead of being dropped.
+// v4: speed-outlier detection confirms a faster-than-walking sample against the
+// next sample before rejecting it, so sustained travel under the vehicle ceiling
+// (bus/car rides reported as activity "unknown") is no longer dropped as a series
+// of teleports.
+const CurrentAlgorithmVersion int16 = 4
 
 type NoiseReason string
 

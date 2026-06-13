@@ -160,6 +160,65 @@ func TestWalkAfterRestCountsDistance(t *testing.T) {
 	assert.Greater(t, total, 120.0, "smoothing must not eat walking distance")
 }
 
+// Regression for the production bug (user 0ec65079, 2026-06-13): a real 2.6 km
+// walk sampled at ~1 Hz produced only ~80 m of distance because every ~1.4 m
+// step is shorter than the 8 m jitter floor, so per-sample gating marked the
+// whole walk as jitter. Measuring displacement from the last anchor must let the
+// small steps accumulate into the real distance.
+func TestHighFrequencyWalkingAccumulatesDistance(t *testing.T) {
+	pipeline := NewPipeline(domain.DefaultNoiseConfig(), nil)
+	start := time.Now()
+
+	// ~1.35 m latitude step every ~1.3 s, straight line, good accuracy — well
+	// below the jitter radius per step but kilometers in aggregate.
+	const stepDeg = 0.0000121 // ~1.35 m in latitude
+	var points []domain.RawLocationPoint
+	for index := 0; index < 200; index++ {
+		points = append(points, rawPoint(
+			55.75+float64(index)*stepDeg, 37.62, 9, 1.0, "walking",
+			start.Add(time.Duration(index*1300)*time.Millisecond),
+		))
+	}
+
+	result := pipeline.ProcessBatch(nil, points, nil, start.Add(10*time.Minute))
+
+	var total float64
+	for _, point := range result.Accepted {
+		total += point.DistanceDeltaM
+	}
+	// 200 steps * ~1.35 m = ~270 m of real walking. Per-sample jitter gating
+	// counted ~0; anchor accumulation must recover most of it.
+	assert.Greater(t, total, 200.0, "high-frequency walking must not be eaten by the jitter floor")
+}
+
+// In-place GPS dithering must still be suppressed: many sub-radius points
+// scattered around one spot accumulate no distance even with anchor-based
+// measurement, because none ever leaves the radius of the fixed anchor.
+func TestInPlaceDitherStaysZero(t *testing.T) {
+	cfg := domain.DefaultNoiseConfig()
+	cfg.StationaryMinPoints = 1000 // disable stationary zeroing to isolate jitter logic
+	pipeline := NewPipeline(cfg, nil)
+	start := time.Now()
+
+	offsets := []float64{0.00002, -0.00003, 0.00001, -0.00002, 0.000025, -0.000015}
+	var points []domain.RawLocationPoint
+	for index := 0; index < 30; index++ {
+		dither := offsets[index%len(offsets)]
+		points = append(points, rawPoint(
+			55.75+dither, 37.62+dither, 9, 0.1, "unknown",
+			start.Add(time.Duration(index*1300)*time.Millisecond),
+		))
+	}
+
+	result := pipeline.ProcessBatch(nil, points, nil, start.Add(5*time.Minute))
+
+	var total float64
+	for _, point := range result.Accepted {
+		total += point.DistanceDeltaM
+	}
+	assert.Less(t, total, 10.0, "in-place dithering must not accumulate distance")
+}
+
 // Distance must never be attributed across a long time gap: two points an hour
 // apart belong to different segments even if geographically close.
 func TestLongGapDoesNotAccumulateDistance(t *testing.T) {
@@ -197,6 +256,60 @@ func TestTeleportPointHasZeroDistance(t *testing.T) {
 	for _, point := range result.Accepted {
 		assert.False(t, point.IsOutlier)
 	}
+}
+
+// Regression for the production bug (user 0ec65079, 2026-06-13): after a rest at
+// a bus stop the user boarded a bus. Every sample reported activity "unknown", so
+// the speed gate applied the walking ceiling (3.5 m/s) and rejected the whole ride
+// (~5-9 m/s) as teleports — ~10 minutes with zero accepted points. Sustained
+// travel under the vehicle ceiling, confirmed by the next sample progressing
+// further from the anchor, must be accepted rather than dropped as a teleport.
+func TestSustainedFastTravelIsAccepted(t *testing.T) {
+	pipeline := NewPipeline(testNoiseConfig(), nil)
+	start := time.Now()
+
+	// ~10 m latitude step every 1.3 s ≈ 7.7 m/s — above walking, below vehicle —
+	// in a straight line, activity unknown (the broken client default).
+	const stepDeg = 0.00009 // ~10 m in latitude
+	var points []domain.RawLocationPoint
+	for index := 0; index < 12; index++ {
+		points = append(points, rawPoint(
+			55.75+float64(index)*stepDeg, 37.62, 10, 8, "unknown",
+			start.Add(time.Duration(index*1300)*time.Millisecond),
+		))
+	}
+
+	result := pipeline.ProcessBatch(nil, points, nil, start.Add(5*time.Minute))
+
+	for _, point := range result.Processed {
+		assert.False(t, point.IsOutlier, "sustained vehicle travel must not be a teleport")
+	}
+	var total float64
+	for _, point := range result.Accepted {
+		total += point.DistanceDeltaM
+	}
+	// 11 steps * ~10 m = ~110 m of real travel must survive.
+	assert.Greater(t, total, 80.0, "confirmed fast travel must accumulate distance")
+}
+
+// A genuine GPS teleport that is NOT physically impossible (under the vehicle
+// ceiling) must still be rejected when the track snaps back toward the anchor on
+// the next sample: out-and-back is the signature of a spike, not real travel.
+func TestTeleportAndReturnRejected(t *testing.T) {
+	pipeline := NewPipeline(testNoiseConfig(), nil)
+	start := time.Now()
+	points := []domain.RawLocationPoint{
+		rawPoint(55.7500, 37.62, 10, 0, "unknown", start),
+		rawPoint(55.7530, 37.62, 10, 0, "unknown", start.Add(10*time.Second)), // ~333 m jump, 33 m/s
+		rawPoint(55.7501, 37.62, 10, 0, "unknown", start.Add(20*time.Second)), // snaps back near start
+	}
+
+	result := pipeline.ProcessBatch(nil, points, nil, start.Add(time.Minute))
+
+	require.Len(t, result.Processed, 3)
+	assert.True(t, result.Processed[1].IsOutlier, "out-and-back spike must be a teleport")
+	assert.False(t, result.Processed[1].IsAccepted)
+	assert.Zero(t, result.Processed[1].DistanceDeltaM)
 }
 
 // Every processing result must be stamped with the current algorithm version so

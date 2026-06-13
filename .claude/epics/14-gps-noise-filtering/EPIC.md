@@ -97,11 +97,43 @@ This EPIC.md; inline code comments on each fix and the reprocess TODO.
 - Added `algorithm_version` (migration 0009) + reprocess repo methods + tests.
 - Deployed worker v2, backfilled: 489→1446 m, 1 trip created.
 - Added active-trip gap completion; redeployed + re-backfilled.
+- Diagnosed second live case (user 0ec65079, 2026-06-13 17:34–20:34 local):
+  6496 pts, 2.6 km real spread, only 82.8 m accumulated, 5002 jitter, 0 trips,
+  state stuck IDLE. Root cause: jitter gated on **adjacent-sample** distance —
+  at ~1.3 s / 1.35 m cadence every step is below the 8 m floor, so v2's raw-track
+  fix still dropped the walk.
+- Fix #3 (algo v3): measure distance/jitter against the last position-establishing
+  anchor (`lastAnchor`, skips jitter/stationary) instead of the previous sample;
+  small steps now accumulate displacement, in-place dither still suppressed.
+  Added 2 regression tests (high-frequency walk recovers >200 m; in-place dither
+  stays ~0). All noise + worker tests green, build clean.
+- Diagnosed third live case (user 0ec65079, 2026-06-13): after a rest at a bus
+  stop (correctly filtered — standing, not a bug), the **bus ride was dropped**.
+  Window 14:45–14:55: 303 `teleport`, ~0 accepted for ~10 min, trip stuck. Root
+  cause: client always sends `activity_type="unknown"`, so the speed gate uses the
+  walking ceiling (3.5 m/s) and rejects all 5–9 m/s vehicle samples as teleports.
+  The "movement onset poorly detected" the user reported = the speed jump on
+  boarding looks like a teleport while speed stays above walking.
+- Fix #4 (algo v4): speed-outlier detection now confirms a faster-than-walking
+  sample against the **next** sample before rejecting it. Above the vehicle
+  ceiling (60 m/s) → always teleport; in between → accept if the next sample keeps
+  progressing away from the anchor (sustained travel), reject if it snaps back
+  (out-and-back spike). Activity-independent, so the broken `activity_type` no
+  longer drops vehicle trips. 2 TDD tests (sustained fast travel accepted +
+  accumulates distance; teleport-and-return rejected). All tests green, vet clean.
 
 ## Final Report
 
 Live result after all fixes (same 214 raw points): pipeline distance
 489 m → 1446 m; the walk became **TRIP_COMPLETED 10:45:03 → 10:47:43,
 249.5 m, 160 s, 12 points** (was 0 trips). All tests green, `go vet` clean.
-Remaining: automatic reprocess+trip-rebuild wiring (TODO in code) and
-tracker-side `activity_type`.
+
+v4 live result (user 0ec65079, 2026-06-13, manual delete+reset reprocess of the
+14:00→ window): bus-ride window `teleport` 303 → **0**; the hour-long void
+(trip ended 14:44 at the stop, next trip only 15:44) became a continuous
+**TRIP_COMPLETED 14:44:49 → 15:22:18, 1701 m, 1465 points** covering the ride.
+
+Remaining: automatic reprocess+trip-rebuild wiring (TODO in code); tracker-side
+`activity_type` is broken (always `unknown`) — Android Activity Recognition is a
+separate task. Once real activity is sent, per-mode speed ceilings become exact
+and the v4 confirmation becomes a safety net rather than the primary gate.
