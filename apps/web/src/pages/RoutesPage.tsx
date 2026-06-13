@@ -1,362 +1,223 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { RouteMap } from "@/components/map/RouteMap";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth } from "@/features/auth/useAuth";
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Clock3, Gauge, Map, Route as RouteIcon, Trophy } from 'lucide-react'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { RouteMap } from '@/components/map/RouteMap'
 import {
-  listRoutes,
-  getRoutePoints,
-  getRouteResults,
-  getRouteAttempts,
+  ComparisonDelta,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  MetricCard,
+  RouteTypeBadge,
+  SectionHeader,
+  StatusBadge,
+} from '@/components/analytics/AnalyticsUi'
+import { useAuth } from '@/features/auth/useAuth'
+import {
   formatDistance,
   formatDuration,
+  getRouteAttempts,
+  getRoutePoints,
+  getRouteResults,
+  listRoutes,
   type Route,
-  type RouteResultResponse,
   type TripAttemptItem,
-} from "@/features/routes/routesApi";
+} from '@/features/routes/routesApi'
+import { cn } from '@/lib/utils'
 
 interface Props {
-  onLogout: () => void;
+  onLogout: () => void
 }
 
-function RouteCard({
-  route,
-  selected,
-  onClick,
-}: {
-  route: Route;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const date = new Date(route.updated_at);
-  const dateStr = date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+function getUserEmail(token: string | null): string {
+  if (!token) return ''
+  try {
+    return (JSON.parse(atob(token.split('.')[1])) as { sub?: string }).sub ?? ''
+  } catch {
+    return ''
+  }
+}
 
+function endpointDistance(route: Route): number {
+  const radius = 6_371_000
+  const lat1 = route.start_lat * Math.PI / 180
+  const lat2 = route.end_lat * Math.PI / 180
+  const deltaLat = (route.end_lat - route.start_lat) * Math.PI / 180
+  const deltaLon = (route.end_lon - route.start_lon) * Math.PI / 180
+  const value = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2
+  return radius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
+}
+
+function isCircuit(route: Route): boolean {
+  return endpointDistance(route) <= 150
+}
+
+function routeName(route: Route): string {
+  return route.name?.trim() || `Circuit ${route.id.slice(0, 6).toUpperCase()}`
+}
+
+function formatDate(value?: string): string {
+  if (!value) return 'No timestamp'
+  return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function RouteEntry({ route, position, selected, onClick }: { route: Route; position: number; selected: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className={[
-        "w-full text-left rounded-lg border p-3 transition-colors hover:bg-accent",
-        selected ? "border-primary bg-accent" : "border-border",
-      ].join(" ")}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-muted-foreground">{dateStr}</span>
-        <Badge variant="secondary" className="text-xs">
-          {route.trips_count} {route.trips_count !== 1 ? "runs" : "run"}
-        </Badge>
-      </div>
-      <div className="flex gap-4 text-sm font-medium">
-        <span>{formatDistance(route.distance_m)}</span>
-      </div>
-      <div className="text-xs text-muted-foreground mt-1 truncate">
-        {route.name ?? `Route ${route.id.slice(0, 8)}`}
-      </div>
+    <button type="button" onClick={onClick} aria-pressed={selected} className={cn(
+      'grid w-full cursor-pointer grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-4 text-left transition-colors',
+      selected ? 'border-l-2 border-l-primary bg-primary/10' : 'border-l-2 border-l-transparent hover:bg-sidebar-accent',
+    )}>
+      <span className="mono-data font-mono text-lg font-black text-muted-foreground">{String(position).padStart(2, '0')}</span>
+      <span className="min-w-0">
+        <strong className="block truncate text-xs font-bold uppercase">{routeName(route)}</strong>
+        <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-muted-foreground">
+          {formatDistance(route.distance_m)} <span className="text-border">/</span> {route.trips_count} runs
+        </span>
+      </span>
+      <RouteTypeBadge isLoop={isCircuit(route)} />
     </button>
-  );
+  )
 }
 
-function formatSpeed(mps: number | undefined): string {
-  if (!mps) return "—";
-  return `${mps} m/s`;
-}
-
-function TripResultCard({
-  label,
-  trip,
-}: {
-  label: string;
-  trip: {
-    trip_id?: string;
-    started_at?: string;
-    duration_sec?: number;
-    distance_m?: number;
-    avg_speed_mps?: number;
-  };
-}) {
-  const date = trip.started_at
-    ? new Date(trip.started_at).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : "—";
-  return (
-    <div className="rounded-lg bg-muted/40 p-3 flex-1">
-      <div className="text-xs text-muted-foreground font-medium mb-1">
-        {label}
-      </div>
-      <div className="font-semibold text-sm">
-        {formatDuration(trip.duration_sec ?? 0)}
-      </div>
-      <div className="text-xs text-muted-foreground mt-0.5">
-        {date} · {formatDistance(trip.distance_m ?? 0)} ·{" "}
-        {formatSpeed(trip.avg_speed_mps)}
-      </div>
-    </div>
-  );
-}
-
-function PersonalRecordsSection({ result }: { result: RouteResultResponse }) {
-  const { best, latest, comparison, attempts_count } = result;
-
-  if (!attempts_count) {
-    return (
-      <div className="py-4 text-center">
-        <p className="text-sm text-muted-foreground">No runs recorded yet.</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Complete a tracked trip on this route to see your results.
-        </p>
-      </div>
-    );
-  }
-
-  const isPersonalRecord = comparison?.latest_vs_best_sec === 0;
-  const diff = comparison?.latest_vs_best_sec ?? 0;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        {best && <TripResultCard label="Best" trip={best} />}
-        {latest && <TripResultCard label="Latest" trip={latest} />}
-        <div className="rounded-lg bg-muted/40 p-3 flex flex-col justify-center items-center gap-1 min-w-[80px]">
-          <div className="text-xs text-muted-foreground font-medium">
-            vs Best
-          </div>
-          {isPersonalRecord ? (
-            <Badge variant="default" className="text-xs">
-              PR
-            </Badge>
-          ) : (
-            <span
-              className={
-                diff > 0
-                  ? "text-orange-500 font-semibold text-sm"
-                  : "text-green-600 font-semibold text-sm"
-              }
-            >
-              {diff > 0 ? `+${diff}s` : `${diff}s`}
-            </span>
-          )}
-          <div className="text-xs text-muted-foreground">
-            {attempts_count} {attempts_count !== 1 ? "runs" : "run"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AttemptsTable({ attempts }: { attempts: TripAttemptItem[] }) {
+function Leaderboard({ attempts }: { attempts: TripAttemptItem[] }) {
   if (attempts.length === 0) {
-    return (
-      <div className="py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          No attempts recorded for this route yet.
-        </p>
-      </div>
-    );
+    return <EmptyState compact title="No timed runs" description="Matched attempts appear after route recognition." />
   }
+  const durations = attempts.map(item => item.duration_sec).filter((value): value is number => value != null)
+  const bestDuration = durations.length ? Math.min(...durations) : 0
+  const sorted = [...attempts].sort((a, b) => (a.duration_sec ?? Number.MAX_SAFE_INTEGER) - (b.duration_sec ?? Number.MAX_SAFE_INTEGER))
+
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="text-muted-foreground border-b">
-          <th className="text-left pb-1 pr-3 font-medium">Date</th>
-          <th className="text-right pb-1 pr-3 font-medium">Distance</th>
-          <th className="text-right pb-1 pr-3 font-medium">Duration</th>
-          <th className="text-right pb-1 pr-3 font-medium">Speed</th>
-          <th className="text-right pb-1 font-medium">Match</th>
-        </tr>
-      </thead>
-      <tbody>
-        {attempts.map((a) => {
-          const date = a.started_at
-            ? new Date(a.started_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "—";
-          return (
-            <tr
-              key={a.trip_id}
-              className={[
-                "border-b last:border-0 hover:bg-accent/50",
-                a.is_best ? "bg-yellow-50 dark:bg-yellow-950/20" : "",
-              ].join(" ")}
-            >
-              <td className="py-1.5 pr-3 text-muted-foreground">
-                {a.is_best && <span className="text-yellow-600 mr-1">★</span>}
-                {date}
-              </td>
-              <td className="py-1.5 pr-3 text-right">
-                {formatDistance(a.distance_m ?? 0)}
-              </td>
-              <td className="py-1.5 pr-3 text-right font-medium">
-                {formatDuration(a.duration_sec ?? 0)}
-              </td>
-              <td className="py-1.5 pr-3 text-right">
-                {formatSpeed(a.avg_speed_mps)}
-              </td>
-              <td className="py-1.5 text-right">
-                {((a.match_score ?? 0) * 100).toFixed(0)}%
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] border-collapse text-left">
+        <thead>
+          <tr className="border-b bg-muted/35 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+            <th className="px-4 py-3">Pos</th>
+            <th className="px-4 py-3">Attempt</th>
+            <th className="px-4 py-3 text-right">Time</th>
+            <th className="px-4 py-3 text-right">Delta</th>
+            <th className="px-4 py-3 text-right">Avg speed</th>
+            <th className="px-4 py-3 text-right">Match</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((attempt, index) => {
+            const duration = attempt.duration_sec ?? 0
+            const best = attempt.is_best || duration === bestDuration
+            return (
+              <tr key={attempt.trip_id ?? `${attempt.started_at}-${index}`} className={cn('border-b transition-colors hover:bg-muted/25', best && 'bg-primary/7')}>
+                <td className="mono-data px-4 py-4 font-mono text-xl font-black">{String(index + 1).padStart(2, '0')}</td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-3">
+                    {best ? <Trophy className="size-4 text-primary" aria-label="Personal best" /> : <span className="size-4" />}
+                    <div>
+                      <p className="text-xs font-bold uppercase">Run {String(sorted.length - index).padStart(2, '0')}</p>
+                      <p className="mt-1 font-mono text-[9px] text-muted-foreground">{formatDate(attempt.started_at)}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="mono-data px-4 py-4 text-right font-mono text-base font-bold">{formatDuration(duration)}</td>
+                <td className="px-4 py-4 text-right"><ComparisonDelta seconds={duration - bestDuration} isBest={best} /></td>
+                <td className="mono-data px-4 py-4 text-right font-mono text-xs">{(attempt.avg_speed_mps ?? 0).toFixed(2)} m/s</td>
+                <td className="mono-data px-4 py-4 text-right font-mono text-xs">{Math.round((attempt.match_score ?? 0) * 100)}%</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 export function RoutesPage({ onLogout }: Props) {
-  const { token } = useAuth();
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
-
-  const routesQuery = useQuery({
-    queryKey: ["routes"],
-    queryFn: () => listRoutes({ limit: 50 }),
-  });
-
+  const { token } = useAuth()
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
+  const routesQuery = useQuery({ queryKey: ['routes'], queryFn: () => listRoutes({ limit: 50 }) })
   const resultsQuery = useQuery({
-    queryKey: ["route-results", selectedRoute?.id],
+    queryKey: ['route-results', selectedRoute?.id],
     queryFn: () => getRouteResults(selectedRoute!.id),
-    enabled: !!selectedRoute,
-  });
-
+    enabled: Boolean(selectedRoute),
+  })
   const attemptsQuery = useQuery({
-    queryKey: ["route-attempts", selectedRoute?.id],
+    queryKey: ['route-attempts', selectedRoute?.id],
     queryFn: () => getRouteAttempts(selectedRoute!.id, { limit: 50 }),
-    enabled: !!selectedRoute,
-  });
-
+    enabled: Boolean(selectedRoute),
+  })
   const pointsQuery = useQuery({
-    queryKey: ["route-points", selectedRoute?.id],
+    queryKey: ['route-points', selectedRoute?.id],
     queryFn: () => getRoutePoints(selectedRoute!.id),
-    enabled: !!selectedRoute,
-  });
+    enabled: Boolean(selectedRoute),
+  })
 
-  let userEmail = "";
-  if (token) {
-    try {
-      userEmail =
-        (JSON.parse(atob(token.split(".")[1])) as { sub?: string }).sub ?? "";
-    } catch {
-      // ignore decode errors
-    }
-  }
-
-  const routes = routesQuery.data?.items ?? [];
-
-  const sidebar = (
-    <div className="flex flex-col gap-3 h-full">
-      <div className="shrink-0">
-        <h2 className="text-sm font-semibold">Routes</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {routes.length} {routes.length !== 1 ? "routes" : "route"} detected
-        </p>
+  const routes = routesQuery.data?.items ?? []
+  const result = resultsQuery.data
+  const best = result?.best
+  const latest = result?.latest
+  const routeList = (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <SectionHeader title="Circuit index" description={`${routes.length} recognized routes`} />
+        <StatusBadge tone="success">Ready</StatusBadge>
       </div>
-
-      {routesQuery.isLoading && (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-          ))}
-        </div>
-      )}
-
-      {routesQuery.isError && (
-        <Alert variant="destructive">
-          <AlertDescription>Could not load routes. Try again.</AlertDescription>
-        </Alert>
-      )}
-
-      {!routesQuery.isLoading &&
-        !routesQuery.isError &&
-        routes.length === 0 && (
-          <div className="flex flex-col items-center gap-2 py-10 px-2 text-center">
-            <p className="text-sm font-medium text-muted-foreground">
-              No routes discovered yet
-            </p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Routes are detected automatically when you repeat similar trips.
-            </p>
-          </div>
-        )}
-
-      <div className="flex flex-col gap-2 overflow-y-auto flex-1">
-        {routes.map((r) => (
-          <RouteCard
-            key={r.id}
-            route={r}
-            selected={selectedRoute?.id === r.id}
-            onClick={() => setSelectedRoute(r)}
-          />
+      <div className="border">
+        {routesQuery.isLoading ? <div className="p-3"><LoadingSkeleton rows={5} /></div> : null}
+        {routesQuery.isError ? <ErrorState title="Index unavailable" description="Route list failed to load." onRetry={() => routesQuery.refetch()} /> : null}
+        {routes.map((route, index) => (
+          <RouteEntry key={route.id} route={route} position={index + 1} selected={selectedRoute?.id === route.id} onClick={() => setSelectedRoute(route)} />
         ))}
       </div>
     </div>
-  );
+  )
 
   return (
-    <AppLayout userEmail={userEmail} onLogout={onLogout} sidebar={sidebar}>
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <div className="flex-1 min-h-0">
-          <RouteMap
-            points={pointsQuery.data ?? []}
-            startPoint={
-              selectedRoute
-                ? {
-                    lat: selectedRoute.start_lat,
-                    lon: selectedRoute.start_lon,
-                  }
-                : undefined
-            }
-            finishPoint={
-              selectedRoute
-                ? {
-                    lat: selectedRoute.end_lat,
-                    lon: selectedRoute.end_lon,
-                  }
-                : undefined
-            }
-          />
-        </div>
+    <AppLayout userEmail={getUserEmail(token)} onLogout={onLogout} sidebar={routeList}>
+      <div className="h-full overflow-y-auto">
+        <div className="p-4 sm:p-6 lg:p-8">
+          <div className="race-panel mb-4 p-4 lg:hidden">{routeList}</div>
+          {!selectedRoute ? (
+            <EmptyState title="Select a circuit" description="Choose a recognized route to open its track map and performance leaderboard." />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+                <MetricCard icon={<RouteIcon className="size-3.5" />} label="Circuit length" value={formatDistance(selectedRoute.distance_m)} detail={isCircuit(selectedRoute) ? 'Closed circuit' : 'Point-to-point sprint'} />
+                <MetricCard icon={<Trophy className="size-3.5" />} label="Personal best" value={best ? formatDuration(best.duration_sec ?? 0) : '--:--'} detail={`${result?.attempts_count ?? selectedRoute.trips_count} classified attempts`} />
+                <MetricCard icon={<Clock3 className="size-3.5" />} label="Latest run" value={latest ? formatDuration(latest.duration_sec ?? 0) : '--:--'} detail={formatDate(latest?.started_at)} accent="amber" />
+                <MetricCard icon={<Gauge className="size-3.5" />} label="Best average" value={`${(best?.avg_speed_mps ?? 0).toFixed(2)}`} detail="Meters / second" accent="cyan" />
+              </div>
 
-        {selectedRoute && (
-          <div className="border-t shrink-0 overflow-y-auto max-h-80">
-            <div className="p-4 space-y-4">
-              <h3 className="text-sm font-semibold">
-                {selectedRoute.name ?? `Route ${selectedRoute.id.slice(0, 8)}`}
-              </h3>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(500px,1.5fr)]">
+                <section className="race-panel overflow-hidden">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <SectionHeader title="Circuit geometry" description="Canonical route model" />
+                    <RouteTypeBadge isLoop={isCircuit(selectedRoute)} />
+                  </div>
+                  {pointsQuery.isError ? (
+                    <ErrorState title="Map unavailable" description="Circuit points failed to load." onRetry={() => pointsQuery.refetch()} />
+                  ) : (
+                    <div className="h-[420px]">
+                      <RouteMap points={pointsQuery.data ?? []} startPoint={{ lat: selectedRoute.start_lat, lon: selectedRoute.start_lon }} finishPoint={{ lat: selectedRoute.end_lat, lon: selectedRoute.end_lon }} />
+                    </div>
+                  )}
+                </section>
 
-              {(resultsQuery.isLoading || attemptsQuery.isLoading) && (
-                <Skeleton className="h-16 w-full" />
-              )}
-
-              {(resultsQuery.isError || attemptsQuery.isError) && (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    Could not load results. Try again.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {resultsQuery.data && (
-                <PersonalRecordsSection result={resultsQuery.data} />
-              )}
-
-              {attemptsQuery.data && (
-                <AttemptsTable attempts={attemptsQuery.data.items} />
-              )}
+                <section className="race-panel overflow-hidden">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <SectionHeader title="Attempt leaderboard" description="Fastest classified run starts P01" />
+                    {result?.comparison ? <ComparisonDelta seconds={result.comparison.latest_vs_best_sec ?? 0} isBest={result.comparison.latest_vs_best_sec === 0} /> : null}
+                  </div>
+                  {(resultsQuery.isLoading || attemptsQuery.isLoading) ? <div className="p-4"><LoadingSkeleton rows={5} /></div> : null}
+                  {(resultsQuery.isError || attemptsQuery.isError) ? <ErrorState title="Timing unavailable" description="Attempt classification failed." onRetry={() => { resultsQuery.refetch(); attemptsQuery.refetch() }} /> : null}
+                  {attemptsQuery.data ? <Leaderboard attempts={attemptsQuery.data.items} /> : null}
+                </section>
+              </div>
+              <div className="flex items-center gap-3 border border-dashed px-4 py-3 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+                <Map className="size-4 text-primary" /> Route data remains read-only until mutation endpoints become available.
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </AppLayout>
-  );
+  )
 }

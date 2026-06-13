@@ -45,3 +45,6 @@ CLAUDE.local.md
 .serena/
 
 temp/
+
+
+__pycache__

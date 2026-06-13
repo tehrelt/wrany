@@ -78,7 +78,18 @@ export class OsmMapProvider implements MapProvider {
             attribution: "OpenStreetMap contributors",
           },
         },
-        layers: [{ id: "osm-tiles", type: "raster", source: "osm" }],
+        layers: [{
+          id: "osm-tiles",
+          type: "raster",
+          source: "osm",
+          paint: {
+            "raster-saturation": -0.9,
+            "raster-contrast": 0.12,
+            "raster-brightness-min": 0.16,
+            "raster-brightness-max": 0.96,
+            "raster-opacity": 0.82,
+          },
+        }],
       },
     });
 
@@ -134,21 +145,68 @@ export class OsmMapProvider implements MapProvider {
       data: toGeoJson(this.state),
     });
     this.map.addLayer({
+      id: "route-casing",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "route"],
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": "#142033",
+        "line-width": 9,
+        "line-opacity": 0.88,
+      },
+    });
+    this.map.addLayer({
+      id: "route-glow",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "route"],
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": "#4cc43f",
+        "line-width": 7,
+        "line-opacity": 0.25,
+        "line-blur": 4,
+      },
+    });
+    this.map.addLayer({
       id: "route-line",
       type: "line",
       source: SOURCE_ID,
       filter: ["==", ["get", "role"], "route"],
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
       paint: {
-        "line-color": "#3b82f6",
+        "line-color": "#45b936",
         "line-width": 4,
       },
     });
 
     for (const [role, color, radius] of [
-      ["start", "#22c55e", 7],
-      ["finish", "#ef4444", 7],
-      ["selected", "#f59e0b", 8],
+      ["start", "#45b936", 7],
+      ["finish", "#152238", 7],
+      ["selected", "#d88a08", 8],
     ] as const) {
+      this.map.addLayer({
+        id: `route-${role}-halo`,
+        type: "circle",
+        source: SOURCE_ID,
+        filter: ["==", ["get", "role"], role],
+        paint: {
+          "circle-radius": radius + 6,
+          "circle-color": color,
+          "circle-opacity": 0.16,
+          "circle-blur": 0.35,
+        },
+      });
       this.map.addLayer({
         id: `route-${role}`,
         type: "circle",
@@ -157,7 +215,7 @@ export class OsmMapProvider implements MapProvider {
         paint: {
           "circle-radius": radius,
           "circle-color": color,
-          "circle-stroke-width": 2,
+          "circle-stroke-width": 3,
           "circle-stroke-color": "#ffffff",
         },
       });
