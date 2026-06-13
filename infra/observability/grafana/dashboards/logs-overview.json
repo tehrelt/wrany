@@ -13,7 +13,7 @@
       "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "datasource": {"type": "loki", "uid": "loki"},
           "expr": "{job=~\".+\"}",
           "legendFormat": ""
         }
@@ -27,7 +27,7 @@
       "gridPos": {"x": 0, "y": 10, "w": 24, "h": 10},
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "datasource": {"type": "loki", "uid": "loki"},
           "expr": "{job=~\".+\"} | json | level=\"ERROR\"",
           "legendFormat": ""
         }
@@ -41,7 +41,7 @@
       "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "datasource": {"type": "loki", "uid": "loki"},
           "expr": "{job=~\".+\"} | json | request_id=\"$request_id\"",
           "legendFormat": ""
         }
@@ -55,7 +55,7 @@
       "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "datasource": {"type": "loki", "uid": "loki"},
           "expr": "{job=~\".+\"} | json | session_id=\"$session_id\"",
           "legendFormat": ""
         }
@@ -69,7 +69,7 @@
       "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "datasource": {"type": "loki", "uid": "loki"},
           "expr": "{job=~\".+\"} | json | event_id=\"$event_id\"",
           "legendFormat": ""
         }
