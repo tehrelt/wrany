@@ -68,7 +68,8 @@ concern; smoothing is an injectable `LocationSmoother`.
 - [x] Complete active trip on long gap.
 - [x] `algorithm_version` column, stamping, reprocess repo methods.
 - [x] Unit + storage tests; deploy + backfill validation.
-- [ ] Wire automatic reprocess + trip rebuild into the job (TODO).
+- [ ] Operator-triggered reprocess + affected trips rebuild — see
+  [TODO-operator-reprocess.md](./TODO-operator-reprocess.md) (NOT automatic).
 - [ ] Tracker-side `activity_type` (separate, Android repo).
 
 ## Acceptance Criteria
