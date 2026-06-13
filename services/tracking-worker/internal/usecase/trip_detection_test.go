@@ -170,6 +170,31 @@ func TestOutlierDoesNotIncreaseTripDistance(t *testing.T) {
 	assert.Equal(t, 1, result.Commands[0].DeltaPointsCount)
 }
 
+// A long silence (app killed / user stopped sending) during an active trip must
+// finalize the trip at the last known point, not silently absorb a point that
+// arrives much later. Before the fix the trip stayed active across the gap.
+func TestLongGapCompletesActiveTrip(t *testing.T) {
+	useCase := NewTripDetectionUseCase(testCfg())
+	start := time.Now()
+	active := useCase.ProcessBatch(idleState(), movement(start, 12), start.Add(time.Minute))
+	require.Equal(t, domain.StateTripActive, active.NewState.State)
+
+	// One point 30 min later, standing still.
+	far := processedPoint(55.80, 37.62, 11, 0, start.Add(30*time.Minute))
+	far.DistanceDeltaM = 0
+	result := useCase.ProcessBatch(active.NewState,
+		[]domain.ProcessedLocationPoint{far}, start.Add(31*time.Minute))
+
+	var completed bool
+	for _, c := range result.Commands {
+		if c.Kind == CmdCompleteTrip {
+			completed = true
+		}
+	}
+	assert.True(t, completed, "long gap must complete the active trip")
+	assert.NotEqual(t, domain.StateTripActive, result.NewState.State)
+}
+
 func TestTrafficLightStopKeepsTripActive(t *testing.T) {
 	useCase := NewTripDetectionUseCase(testCfg())
 	start := time.Now()

@@ -179,6 +179,34 @@ func (u *TripDetectionUseCase) ProcessBatch(
 			}
 
 		case domain.StateTripActive:
+			gapExceeded := result.NewState.LastProcessedAt != nil &&
+				point.RecordedAt.Sub(*result.NewState.LastProcessedAt) >
+					time.Duration(u.cfg.StopMinDurationSec)*time.Second
+			if gapExceeded {
+				// A long silence ends the trip at the last known point; the late
+				// point starts a fresh evaluation instead of extending the trip.
+				flushActive()
+				endedAt := *result.NewState.LastProcessedAt
+				endLat, endLon := lat, lon
+				if result.NewState.LastPointLat != nil && result.NewState.LastPointLon != nil {
+					endLat, endLon = *result.NewState.LastPointLat, *result.NewState.LastPointLon
+				}
+				result.Commands = append(result.Commands, TripCommand{
+					Kind: CmdCompleteTrip, TripID: *result.NewState.ActiveTripID,
+					EndedAt: &endedAt, EndLat: &endLat, EndLon: &endLon,
+				})
+				result.NewState.State = domain.StateIdle
+				result.NewState.ActiveTripID = nil
+				result.NewState.StopStartedAt = nil
+				result.NewState.StopCenterLat = nil
+				result.NewState.StopCenterLon = nil
+				if moving {
+					startCandidate(&result.NewState, point, lat, lon)
+					candidateWindow = append(candidateWindow, *point)
+					candidatePoints = append(candidatePoints, tp)
+				}
+				break
+			}
 			if point.IsStationary {
 				flushActive()
 				at := point.RecordedAt
