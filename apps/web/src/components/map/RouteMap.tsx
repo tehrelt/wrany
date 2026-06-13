@@ -36,9 +36,8 @@ function createProvider(type: ResolvedMapProviderType): MapProvider {
 function getInitialProvider(provider: MapProviderType): ResolvedMapProviderType {
   if (provider === 'osm') return 'osm'
   if (provider === 'yandex-v2') return 'yandex-v2'
-  if (provider === 'yandex') return 'yandex'
   if (provider === 'maplibre-vector') return 'maplibre-vector'
-  return 'maplibre-vector'
+  return 'yandex'
 }
 
 const PROVIDER_OPTIONS: { value: ResolvedMapProviderType; label: string }[] = [
@@ -69,13 +68,17 @@ export function RouteMap({
   const providerRef = useRef<MapProvider | null>(null)
   const fallbackRef = useRef(onProviderFallback)
   const stateRef = useRef<MapProviderState>({ points, selectedPoint, startPoint, finishPoint })
+  const manualSelectionRef = useRef(false)
   const [activeProvider, setActiveProvider] = useState<ResolvedMapProviderType>(() => getInitialProvider(provider))
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   fallbackRef.current = onProviderFallback
   stateRef.current = { points, selectedPoint, startPoint, finishPoint }
 
-  useEffect(() => setActiveProvider(getInitialProvider(provider)), [provider])
+  useEffect(() => {
+    manualSelectionRef.current = false
+    setActiveProvider(getInitialProvider(provider))
+  }, [provider])
 
   useEffect(() => {
     const container = containerRef.current
@@ -90,6 +93,10 @@ export function RouteMap({
 
     const fallback = (reason: string) => {
       if (cancelled) return
+      if (manualSelectionRef.current) {
+        setStatus('error')
+        return
+      }
       const nextProvider = getFallbackProvider(activeProvider)
       if (!nextProvider) {
         setStatus('error')
@@ -164,7 +171,7 @@ export function RouteMap({
           <button
             key={value}
             type="button"
-            onClick={() => setActiveProvider(value)}
+            onClick={() => { manualSelectionRef.current = true; setActiveProvider(value) }}
             className={`px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors ${
               activeProvider === value
                 ? isDark

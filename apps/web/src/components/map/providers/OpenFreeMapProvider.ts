@@ -50,38 +50,7 @@ export class OpenFreeMapProvider implements MapProvider {
       container,
       center: DEFAULT_CENTER,
       zoom: 11,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            attribution: "© OpenStreetMap contributors",
-          },
-        },
-        layers: [
-          {
-            id: "bg",
-            type: "background",
-            paint: { "background-color": "#080c12" },
-          },
-          {
-            id: "osm-dark",
-            type: "raster",
-            source: "osm",
-            paint: {
-              "raster-saturation": -0.95,
-              "raster-brightness-min": 0,
-              "raster-brightness-max": 0.22,
-              "raster-contrast": 0.5,
-              "raster-opacity": 1,
-            },
-          },
-        ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
+      style: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json",
     });
 
     await new Promise<void>((resolve, reject) => {
