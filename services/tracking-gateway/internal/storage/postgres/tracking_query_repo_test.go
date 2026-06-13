@@ -37,6 +37,22 @@ CREATE TABLE IF NOT EXISTS raw_location_points (
     PRIMARY KEY (user_id, device_id, event_id)
 );`
 
+const createProcessedLocationPointsSQL = `
+CREATE TABLE IF NOT EXISTS processed_location_points (
+    user_id UUID NOT NULL,
+    device_id UUID NOT NULL,
+    event_id TEXT NOT NULL,
+    filtered_lat DOUBLE PRECISION NULL,
+    filtered_lon DOUBLE PRECISION NULL,
+    accuracy_m DOUBLE PRECISION NOT NULL,
+    speed_mps DOUBLE PRECISION NULL,
+    is_accepted BOOLEAN NOT NULL,
+    is_stationary BOOLEAN NOT NULL,
+    noise_reason TEXT NOT NULL DEFAULT '',
+    recorded_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, device_id, event_id)
+);`
+
 func TestTrackingQueryRepo_GetPoints_UserIsolation(t *testing.T) {
 	db, cleanup := newTestDB(t)
 	defer cleanup()
@@ -225,4 +241,61 @@ func TestTrackingQueryRepo_GetSummary_Empty(t *testing.T) {
 	assert.Equal(t, 0, summary.PointsCount)
 	assert.Nil(t, summary.FirstRecordedAt)
 	assert.Nil(t, summary.LastRecordedAt)
+}
+
+func TestTrackingQueryRepo_GetTrack_UsesProcessedPointsAndSegmentBreaks(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := db.Exec(ctx, createProcessedLocationPointsSQL)
+	require.NoError(t, err)
+
+	repo := postgres.NewTrackingQueryRepo(db)
+	userID := insertTestUser(t, db)
+	base := time.Now().UTC().Add(-30 * time.Minute)
+
+	for i := range 4 {
+		recordedAt := base.Add(time.Duration(i) * 30 * time.Second)
+		_, err = db.Exec(ctx, `
+			INSERT INTO processed_location_points
+				(user_id, device_id, event_id, filtered_lat, filtered_lon, accuracy_m,
+				 speed_mps, is_accepted, is_stationary, noise_reason, recorded_at)
+			VALUES ($1, $1, $2, $3, $4, 5, 0.1, true, true, '', $5)`,
+			userID, "stay-"+string(rune('0'+i)), 55.0+float64(i)*0.00001,
+			37.0+float64(i)*0.00001, recordedAt,
+		)
+		require.NoError(t, err)
+	}
+
+	for i := range 2 {
+		recordedAt := base.Add(5*time.Minute + time.Duration(i)*40*time.Second)
+		reason := ""
+		if i == 0 {
+			reason = "segment_break"
+		}
+		_, err = db.Exec(ctx, `
+			INSERT INTO processed_location_points
+				(user_id, device_id, event_id, filtered_lat, filtered_lon, accuracy_m,
+				 speed_mps, is_accepted, is_stationary, noise_reason, recorded_at)
+			VALUES ($1, $1, $2, $3, $4, 5, 1.2, true, false, $5, $6)`,
+			userID, "move-"+string(rune('0'+i)), 55.001+float64(i)*0.0001,
+			37.001+float64(i)*0.0001, reason, recordedAt,
+		)
+		require.NoError(t, err)
+	}
+
+	segments, err := repo.GetTrack(ctx, domain.TrackFilter{
+		UserID: userID.String(), From: base.Add(-time.Minute), To: base.Add(time.Hour),
+		MinStaySec: 60, MinMoveSec: 30,
+	})
+	require.NoError(t, err)
+	require.Len(t, segments, 3)
+
+	assert.Equal(t, domain.TrackSegmentStay, segments[0].Kind)
+	assert.Equal(t, 4, segments[0].MergedCount)
+	assert.InDelta(t, 55.000015, segments[0].Lat, 0.000001)
+	assert.NotEqual(t, segments[0].SegmentID, segments[1].SegmentID)
+	assert.Equal(t, domain.TrackSegmentMove, segments[1].Kind)
+	assert.Equal(t, segments[1].SegmentID, segments[2].SegmentID)
 }

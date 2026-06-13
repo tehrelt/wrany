@@ -470,7 +470,7 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			raw_lat, raw_lon, filtered_lat, filtered_lon, filtered_geom,
 			accuracy_m, speed_mps, implied_speed_mps, distance_delta_m,
 			is_accepted, is_outlier, is_stationary, noise_reason, stationary_since,
-			recorded_at, received_at, processed_at
+			recorded_at, received_at, processed_at, algorithm_version
 		) VALUES (
 			$1, $2, $3,
 			$4, $5, $6, $7,
@@ -480,7 +480,7 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			END,
 			$8, $9, $10, $11,
 			$12, $13, $14, $15, $16,
-			$17, $18, $19
+			$17, $18, $19, $20
 		) ON CONFLICT (user_id, device_id, event_id) DO NOTHING`
 	for _, point := range points {
 		if _, err := tx.Exec(ctx, q,
@@ -489,9 +489,120 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			point.AccuracyM, point.SpeedMps, point.ImpliedSpeedMps, point.DistanceDeltaM,
 			point.IsAccepted, point.IsOutlier, point.IsStationary, string(point.NoiseReason),
 			point.StationarySince,
-			point.RecordedAt, point.ReceivedAt, point.ProcessedAt,
+			point.RecordedAt, point.ReceivedAt, point.ProcessedAt, point.AlgorithmVersion,
 		); err != nil {
 			return fmt.Errorf("trip_repo: insert processed point %s: %w", point.EventID, err)
+		}
+	}
+	return nil
+}
+
+// FetchPointsForReprocessing returns raw points in [from, to) for a pair whose
+// processing result is either missing OR was produced by an algorithm version
+// older than currentVersion. Ordered by recorded_at ASC, event_id ASC.
+//
+// Unlike FetchUnprocessedPoints (which only ever returns never-processed points),
+// this path is for re-running the noise pipeline after the algorithm is bumped.
+//
+// TODO(reprocess): this only recomputes processed_location_points. A full
+// historical reprocess must also rebuild affected trips/trip_points — that is a
+// separate task and intentionally not done here.
+func (r *TripRepo) FetchPointsForReprocessing(ctx context.Context, userID, deviceID uuid.UUID, from, to time.Time, currentVersion int16) ([]domain.RawLocationPoint, error) {
+	const q = `
+		SELECT
+			rlp.user_id, rlp.device_id, rlp.event_id,
+			rlp.recorded_at, rlp.received_at,
+			rlp.lat, rlp.lon,
+			rlp.accuracy_m, rlp.speed_mps, rlp.bearing_deg,
+			rlp.activity_type, rlp.activity_confidence, rlp.battery_level,
+			rlp.source
+		FROM raw_location_points rlp
+		LEFT JOIN processed_location_points plp
+		       ON plp.user_id = rlp.user_id
+		      AND plp.device_id = rlp.device_id
+		      AND plp.event_id = rlp.event_id
+		WHERE rlp.user_id = $1
+		  AND rlp.device_id = $2
+		  AND rlp.recorded_at >= $3
+		  AND rlp.recorded_at < $4
+		  AND (plp.event_id IS NULL OR plp.algorithm_version < $5)
+		ORDER BY rlp.recorded_at ASC, rlp.event_id ASC`
+
+	rows, err := r.db.Query(ctx, q, userID, deviceID, from, to, currentVersion)
+	if err != nil {
+		return nil, fmt.Errorf("trip_repo: fetch reprocess points: %w", err)
+	}
+	defer rows.Close()
+
+	var pts []domain.RawLocationPoint
+	for rows.Next() {
+		var p domain.RawLocationPoint
+		if err := rows.Scan(
+			&p.UserID, &p.DeviceID, &p.EventID,
+			&p.RecordedAt, &p.ReceivedAt,
+			&p.Lat, &p.Lon,
+			&p.AccuracyM, &p.SpeedMps, &p.BearingDeg,
+			&p.ActivityType, &p.ActivityConfidence, &p.BatteryLevel,
+			&p.Source,
+		); err != nil {
+			return nil, fmt.Errorf("trip_repo: scan reprocess point: %w", err)
+		}
+		pts = append(pts, p)
+	}
+	return pts, rows.Err()
+}
+
+// UpsertProcessedPoints inserts new processing results or updates existing ones
+// in place, but only when the stored algorithm_version is strictly older than the
+// incoming one. Derived fields, noise flags, algorithm_version and processed_at are
+// refreshed; raw_lat/raw_lon are left untouched (they mirror the immutable raw row).
+//
+// This is the write side of the reprocess path. The normal detection batch keeps
+// using insertProcessedPoints (ON CONFLICT DO NOTHING) so a re-run never clobbers a
+// result that is already at the current version.
+func (r *TripRepo) UpsertProcessedPoints(ctx context.Context, points []domain.ProcessedLocationPoint) error {
+	const q = `
+		INSERT INTO processed_location_points (
+			user_id, device_id, event_id,
+			raw_lat, raw_lon, filtered_lat, filtered_lon, filtered_geom,
+			accuracy_m, speed_mps, implied_speed_mps, distance_delta_m,
+			is_accepted, is_outlier, is_stationary, noise_reason, stationary_since,
+			recorded_at, received_at, processed_at, algorithm_version
+		) VALUES (
+			$1, $2, $3,
+			$4, $5, $6, $7,
+			CASE WHEN $6::double precision IS NULL OR $7::double precision IS NULL
+			     THEN NULL
+			     ELSE ST_SetSRID(ST_MakePoint($7, $6), 4326)
+			END,
+			$8, $9, $10, $11,
+			$12, $13, $14, $15, $16,
+			$17, $18, $19, $20
+		)
+		ON CONFLICT (user_id, device_id, event_id) DO UPDATE SET
+			filtered_lat      = EXCLUDED.filtered_lat,
+			filtered_lon      = EXCLUDED.filtered_lon,
+			filtered_geom     = EXCLUDED.filtered_geom,
+			implied_speed_mps = EXCLUDED.implied_speed_mps,
+			distance_delta_m  = EXCLUDED.distance_delta_m,
+			is_accepted       = EXCLUDED.is_accepted,
+			is_outlier        = EXCLUDED.is_outlier,
+			is_stationary     = EXCLUDED.is_stationary,
+			noise_reason      = EXCLUDED.noise_reason,
+			stationary_since  = EXCLUDED.stationary_since,
+			processed_at      = EXCLUDED.processed_at,
+			algorithm_version = EXCLUDED.algorithm_version
+		WHERE processed_location_points.algorithm_version < EXCLUDED.algorithm_version`
+	for _, point := range points {
+		if _, err := r.db.Exec(ctx, q,
+			point.UserID, point.DeviceID, point.EventID,
+			point.RawLat, point.RawLon, point.FilteredLat, point.FilteredLon,
+			point.AccuracyM, point.SpeedMps, point.ImpliedSpeedMps, point.DistanceDeltaM,
+			point.IsAccepted, point.IsOutlier, point.IsStationary, string(point.NoiseReason),
+			point.StationarySince,
+			point.RecordedAt, point.ReceivedAt, point.ProcessedAt, point.AlgorithmVersion,
+		); err != nil {
+			return fmt.Errorf("trip_repo: upsert processed point %s: %w", point.EventID, err)
 		}
 	}
 	return nil

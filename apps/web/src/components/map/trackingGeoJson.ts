@@ -1,19 +1,27 @@
 import type { FeatureCollection, Feature, LineString, Point } from 'geojson'
 import type { TrackingPoint, TrackSegment } from '@/features/tracking/trackingApi'
+import { splitByGap } from './geoGap'
+
+function lineFeatures<T extends { lat: number; lon: number; recorded_at: string }>(
+  items: T[],
+): Feature<LineString>[] {
+  // Break the trace at GPS teleports / long pauses so a single line never jumps
+  // across the map. Each continuous run becomes its own LineString.
+  return splitByGap(items, item => ({ lat: item.lat, lon: item.lon, recordedAt: item.recorded_at }))
+    .filter(run => run.length >= 2)
+    .map(run => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: run.map(item => [item.lon, item.lat]) },
+      properties: {},
+    }))
+}
 
 export function pointsToGeoJSON(points: TrackingPoint[]): FeatureCollection {
   if (points.length === 0) {
     return { type: 'FeatureCollection', features: [] }
   }
 
-  const line: Feature<LineString> = {
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: points.map(p => [p.lon, p.lat]),
-    },
-    properties: {},
-  }
+  const lines = lineFeatures(points)
 
   const dots: Feature<Point>[] = points.map(p => ({
     type: 'Feature',
@@ -27,7 +35,7 @@ export function pointsToGeoJSON(points: TrackingPoint[]): FeatureCollection {
     },
   }))
 
-  return { type: 'FeatureCollection', features: [line, ...dots] }
+  return { type: 'FeatureCollection', features: [...lines, ...dots] }
 }
 
 // trackToGeoJSON converts simplified track segments into two GeoJSON collections:
@@ -42,11 +50,7 @@ export function trackToGeoJSON(segments: TrackSegment[]): {
     return { moveGeo: empty, stayGeo: empty }
   }
 
-  const line: Feature<LineString> = {
-    type: 'Feature',
-    geometry: { type: 'LineString', coordinates: segments.map(s => [s.lon, s.lat]) },
-    properties: {},
-  }
+  const lines = lineFeatures(segments)
 
   const moveDots: Feature<Point>[] = segments
     .filter(s => s.kind === 'move')
@@ -77,7 +81,7 @@ export function trackToGeoJSON(segments: TrackSegment[]): {
     }))
 
   return {
-    moveGeo: { type: 'FeatureCollection', features: segments.length >= 2 ? [line, ...moveDots] : moveDots },
+    moveGeo: { type: 'FeatureCollection', features: [...lines, ...moveDots] },
     stayGeo: { type: 'FeatureCollection', features: stayDots },
   }
 }

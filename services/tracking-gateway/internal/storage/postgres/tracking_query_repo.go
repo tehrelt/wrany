@@ -121,9 +121,8 @@ func (r *TrackingQueryRepo) DeletePoint(ctx context.Context, userID, eventID str
 	return nil
 }
 
-// GetTrack returns a simplified track: stationary clusters are collapsed into
-// a single centroid (kind="stay"), moving points are returned individually (kind="move").
-// Points with speed_mps < 0.5 m/s or activity_type = 'stationary' are treated as stationary.
+// GetTrack returns accepted filtered points. Stationary clusters are collapsed
+// into centroids, while processing segment breaks remain disconnected.
 func (r *TrackingQueryRepo) GetTrack(
 	ctx context.Context,
 	f domain.TrackFilter,
@@ -142,55 +141,89 @@ func (r *TrackingQueryRepo) GetTrack(
 	minStayArg := strconv.Itoa(argIdx)
 	args = append(args, f.MinStaySec)
 
-	// Two-pass island detection:
-	// Pass 1 — classify by speed threshold, group consecutive same-state runs.
-	// Pass 2 — reclassify move groups shorter than min_move_sec as stationary, re-group.
-	// Final — aggregate stay groups (with HAVING min_stay_sec), keep move points as-is.
 	query := `
-		WITH classified AS (
-			SELECT event_id, recorded_at, lat, lon, speed_mps, accuracy_m,
-				(COALESCE(speed_mps, 0) < $4 OR activity_type = 'stationary') AS is_stationary
-			FROM raw_location_points
-			WHERE user_id = $1 AND recorded_at >= $2 AND recorded_at <= $3 ` + deviceClause + `
+		WITH accepted AS (
+			SELECT device_id, event_id, recorded_at,
+				filtered_lat AS lat, filtered_lon AS lon,
+				speed_mps, accuracy_m,
+				(is_stationary OR COALESCE(speed_mps, 0) < $4) AS is_stationary,
+				noise_reason
+			FROM processed_location_points
+			WHERE user_id = $1
+				AND recorded_at >= $2 AND recorded_at <= $3
+				AND is_accepted
+				AND filtered_lat IS NOT NULL AND filtered_lon IS NOT NULL ` + deviceClause + `
 		),
-		bordered1 AS (
+		device_segments AS (
 			SELECT *,
-				(is_stationary IS DISTINCT FROM LAG(is_stationary) OVER (ORDER BY recorded_at)) AS is_border
-			FROM classified
+				SUM((noise_reason = 'segment_break')::int) OVER (
+					PARTITION BY device_id
+					ORDER BY recorded_at, event_id
+					ROWS UNBOUNDED PRECEDING
+				) AS device_segment
+			FROM accepted
 		),
-		grouped1 AS (
+		segmented AS (
 			SELECT *,
-				SUM(is_border::int) OVER (ORDER BY recorded_at ROWS UNBOUNDED PRECEDING) AS grp
-			FROM bordered1
+				DENSE_RANK() OVER (ORDER BY device_id, device_segment)::int AS segment_id
+			FROM device_segments
 		),
-		move_durations AS (
-			SELECT grp,
+		state_borders AS (
+			SELECT *,
+				(is_stationary IS DISTINCT FROM LAG(is_stationary) OVER (
+					PARTITION BY device_id, device_segment
+					ORDER BY recorded_at, event_id
+				)) AS is_state_border
+			FROM segmented
+		),
+		state_groups AS (
+			SELECT *,
+				SUM(is_state_border::int) OVER (
+					PARTITION BY device_id, device_segment
+					ORDER BY recorded_at, event_id
+					ROWS UNBOUNDED PRECEDING
+				) AS state_group
+			FROM state_borders
+		),
+		state_durations AS (
+			SELECT device_id, device_segment, state_group,
 				EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS dur_sec
-			FROM grouped1
-			WHERE NOT is_stationary
-			GROUP BY grp
+			FROM state_groups
+			GROUP BY device_id, device_segment, state_group
 		),
 		reclassified AS (
 			SELECT g.*,
 				CASE
-					WHEN NOT g.is_stationary AND COALESCE(md.dur_sec, 0) < $` + minMoveArg + `
-						THEN true
+					WHEN NOT g.is_stationary AND d.dur_sec < $` + minMoveArg + ` THEN true
 					ELSE g.is_stationary
 				END AS is_stationary2
-			FROM grouped1 g
-			LEFT JOIN move_durations md ON md.grp = g.grp
+			FROM state_groups g
+			JOIN state_durations d USING (device_id, device_segment, state_group)
 		),
-		bordered2 AS (
+		final_borders AS (
 			SELECT *,
-				(is_stationary2 IS DISTINCT FROM LAG(is_stationary2) OVER (ORDER BY recorded_at)) AS is_border2
+				(is_stationary2 IS DISTINCT FROM LAG(is_stationary2) OVER (
+					PARTITION BY device_id, device_segment
+					ORDER BY recorded_at, event_id
+				)) AS is_final_border
 			FROM reclassified
 		),
-		grouped2 AS (
+		final_groups AS (
 			SELECT *,
-				SUM(is_border2::int) OVER (ORDER BY recorded_at ROWS UNBOUNDED PRECEDING) AS grp2
-			FROM bordered2
+				SUM(is_final_border::int) OVER (
+					PARTITION BY device_id, device_segment
+					ORDER BY recorded_at, event_id
+					ROWS UNBOUNDED PRECEDING
+				) AS final_group
+			FROM final_borders
+		),
+		final_durations AS (
+			SELECT device_id, device_segment, final_group,
+				EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS dur_sec
+			FROM final_groups
+			GROUP BY device_id, device_segment, final_group
 		)
-		SELECT 'stay'::text AS kind,
+		SELECT 'stay'::text AS kind, segment_id,
 			''::text AS event_id,
 			MIN(recorded_at) AS recorded_at,
 			MAX(recorded_at) AS period_end,
@@ -198,24 +231,25 @@ func (r *TrackingQueryRepo) GetTrack(
 			NULL::float8 AS speed_mps, NULL::float8 AS accuracy_m,
 			EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS stay_duration_sec,
 			COUNT(*)::int AS merged_count
-		FROM grouped2
+		FROM final_groups
 		WHERE is_stationary2
-		GROUP BY grp2
+		GROUP BY device_id, device_segment, segment_id, final_group
 		HAVING EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int >= $` + minStayArg + `
 
 		UNION ALL
 
-		SELECT 'move'::text AS kind,
-			event_id::text,
-			recorded_at, recorded_at AS period_end,
-			lat, lon,
-			speed_mps, accuracy_m,
+		SELECT 'move'::text AS kind, g.segment_id,
+			g.event_id::text,
+			g.recorded_at, g.recorded_at AS period_end,
+			g.lat, g.lon,
+			g.speed_mps, g.accuracy_m,
 			0::int AS stay_duration_sec,
 			1::int AS merged_count
-		FROM grouped2
-		WHERE NOT is_stationary2
+		FROM final_groups g
+		JOIN final_durations d USING (device_id, device_segment, final_group)
+		WHERE NOT g.is_stationary2 OR d.dur_sec < $` + minStayArg + `
 
-		ORDER BY recorded_at
+		ORDER BY recorded_at, event_id
 	`
 
 	rows, err := r.db.Query(ctx, query, args...)
@@ -229,7 +263,7 @@ func (r *TrackingQueryRepo) GetTrack(
 		var s domain.TrackSegment
 		var kindStr string
 		if err := rows.Scan(
-			&kindStr, &s.EventID,
+			&kindStr, &s.SegmentID, &s.EventID,
 			&s.RecordedAt, &s.PeriodEnd,
 			&s.Lat, &s.Lon,
 			&s.SpeedMps, &s.AccuracyM,
@@ -288,4 +322,3 @@ func (r *TrackingQueryRepo) GetSummary(
 	}
 	return s, nil
 }
-

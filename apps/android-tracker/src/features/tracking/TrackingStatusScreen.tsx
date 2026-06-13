@@ -110,6 +110,16 @@ export function TrackingStatusScreen(): React.JSX.Element {
     }
   }
 
+  // Activity Recognition powers the low-power motion wake-up. Optional: if the
+  // user denies it, tracking still works via sparse-GPS fallback.
+  async function requestActivityRecognition(): Promise<void> {
+    if (Platform.Version >= 29) {
+      await PermissionsAndroid.request(
+        'android.permission.ACTIVITY_RECOGNITION' as any,
+      );
+    }
+  }
+
   function openBackgroundLocationSettings(): void {
     Alert.alert(
       'Background location needed',
@@ -149,6 +159,7 @@ export function TrackingStatusScreen(): React.JSX.Element {
         return;
       }
       await requestNotifications();
+      await requestActivityRecognition();
       await checkPermissions();
 
       const token = await getAccessToken();

@@ -25,6 +25,7 @@ type RouteQueryRepo interface {
 	GetRoute(ctx context.Context, routeID, userID string) (domain.Route, error)
 	ListRouteTrips(ctx context.Context, f domain.RouteTripFilter) ([]domain.RouteTrip, string, error)
 	GetRoutePoints(ctx context.Context, routeID, userID string) ([]domain.RoutePoint, error)
+	DeleteRoute(ctx context.Context, routeID, userID string) error
 }
 
 type RouteQueryUsecase struct {
@@ -94,6 +95,17 @@ func (u *RouteQueryUsecase) ListRouteTrips(ctx context.Context, in ListRouteTrip
 		Limit:   limit,
 		Cursor:  in.Cursor,
 	})
+}
+
+// DeleteRoute removes a route owned by the user. Cascades to route_trips links
+// only; the underlying trips are preserved. Returns ErrRouteNotFound if the
+// route does not exist or is not owned by the user.
+func (u *RouteQueryUsecase) DeleteRoute(ctx context.Context, userID, routeID string) error {
+	err := u.repo.DeleteRoute(ctx, routeID, userID)
+	if errors.Is(err, ErrRouteNotFound) {
+		return ErrRouteNotFound
+	}
+	return err
 }
 
 func (u *RouteQueryUsecase) GetRoutePoints(ctx context.Context, userID, routeID string) ([]domain.RoutePoint, error) {

@@ -67,6 +67,7 @@ export async function deletePoint(eventId: string): Promise<void> {
 
 export interface TrackSegment {
   kind: 'move' | 'stay'
+  segment_id: number
   event_id: string
   recorded_at: string
   period_end: string

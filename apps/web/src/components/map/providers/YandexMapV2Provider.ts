@@ -6,6 +6,7 @@ import type {
 } from './MapProvider'
 import { getRouteBounds } from './MapProvider'
 import { mapTokens } from './yandexTelemetryMapStyle'
+import { buildRoutePolylines, buildTelemetrySegments } from './routeSegments'
 
 const SCRIPT_ID = 'yandex-maps-api-v2'
 const LOAD_TIMEOUT_MS = 10_000
@@ -130,8 +131,11 @@ export class YandexMapV2Provider implements MapProvider {
     if (!this.map || !this.ymaps) return
 
     this.map.geoObjects.removeAll()
-    if (state.points.length > 1) {
-      const coordinates = state.points.map(toYandexPoint)
+
+    // Continuous base route per run (split only at GPS gaps). v2 wants [lat,lon]
+    // order. Always drawn so the trace stays continuous under dense telemetry.
+    for (const line of buildRoutePolylines(state.points)) {
+      const coordinates = line.map(([lon, lat]) => [lat, lon] as [number, number])
       this.map.geoObjects.add(new this.ymaps.Polyline(
         coordinates,
         {},
@@ -142,6 +146,18 @@ export class YandexMapV2Provider implements MapProvider {
         {},
         { strokeColor: mapTokens.routePrimary, strokeWidth: 5, strokeOpacity: 0.96 },
       ))
+    }
+
+    // Speed-colored segments overlay the base line.
+    if (state.colorByTelemetry) {
+      for (const segment of buildTelemetrySegments(state.points)) {
+        const coordinates = [toYandexPoint(segment.from), toYandexPoint(segment.to)]
+        this.map.geoObjects.add(new this.ymaps.Polyline(
+          coordinates,
+          {},
+          { strokeColor: segment.color, strokeWidth: 5, strokeOpacity: segment.opacity },
+        ))
+      }
     }
 
     const markers = [

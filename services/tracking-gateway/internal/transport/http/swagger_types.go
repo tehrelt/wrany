@@ -137,6 +137,7 @@ type TrackingSummaryEnv struct {
 // kind="move": a single GPS point; kind="stay": a centroid of a stationary cluster.
 type TrackSegmentItem struct {
 	Kind            string   `json:"kind"              example:"stay"`
+	SegmentID       int      `json:"segment_id"        example:"2"`
 	EventID         string   `json:"event_id"`
 	RecordedAt      string   `json:"recorded_at"       example:"2026-06-10T12:00:01Z"`
 	PeriodEnd       string   `json:"period_end"        example:"2026-06-10T14:30:00Z"`
@@ -216,7 +217,6 @@ type TripPointsEnv struct {
 	Data  TripPointsResponse `json:"data"`
 	Error *string            `json:"error"`
 }
-
 
 // RouteItem is a single route in list/detail responses.
 type RouteItem struct {

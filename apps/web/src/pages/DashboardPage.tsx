@@ -7,10 +7,9 @@ import { PointsTable } from '@/components/tracking/PointsTable'
 import {
   defaultFrom,
   defaultTo,
-  defaultTrackSettings,
   TrackingFilters,
-  type TrackDisplaySettings,
 } from '@/features/tracking/TrackingFilters'
+import { useTrackSettings } from '@/features/tracking/useTrackSettings'
 import { ErrorState, MetricCard, SectionHeader } from '@/components/analytics/AnalyticsUi'
 import {
   deletePoint,
@@ -50,7 +49,7 @@ export function DashboardPage({ onLogout }: Props) {
   const [to, setTo] = useState(defaultTo)
   const [revision, setRevision] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [trackSettings, setTrackSettings] = useState<TrackDisplaySettings>(defaultTrackSettings)
+  const [trackSettings, setTrackSettings] = useTrackSettings()
 
   const filter = { device_id: deviceId || undefined, from, to }
   const trackQuery = useQuery<TrackSegment[]>({
@@ -88,7 +87,12 @@ export function DashboardPage({ onLogout }: Props) {
   const mapPoints = segments.map(segment => ({
     lat: segment.lat,
     lon: segment.lon,
+    segmentId: segment.segment_id,
     recordedAt: segment.recorded_at,
+    speedMps: segment.speed_mps,
+    accuracyM: segment.accuracy_m,
+    kind: segment.kind,
+    eventId: segment.event_id,
   }))
   const loading = trackQuery.isLoading || summaryQuery.isLoading
   const filters = (
@@ -133,6 +137,7 @@ export function DashboardPage({ onLogout }: Props) {
               <div className="h-[420px] lg:h-[520px]">
                 <RouteMap
                   points={mapPoints}
+                  colorByTelemetry
                   selectedPoint={selectedSegment ? {
                     lat: selectedSegment.lat,
                     lon: selectedSegment.lon,

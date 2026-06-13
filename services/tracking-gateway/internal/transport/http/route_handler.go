@@ -131,6 +131,41 @@ func (h *RouteHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, routeToItem(route))
 }
 
+// DeleteRoute godoc
+// @Summary      Delete a route
+// @Description  Removes the route and its trip-match links. The underlying trips are preserved.
+// @Tags         routes
+// @Param        id  path  string  true  "Route UUID"
+// @Success      204
+// @Failure      401  {object}  ApiError
+// @Failure      404  {object}  ApiError
+// @Security     BearerAuth
+// @Router       /v1/routes/{id} [delete]
+func (h *RouteHandler) DeleteRoute(w http.ResponseWriter, r *http.Request) {
+	userID, ok := UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	routeID := r.PathValue("id")
+	if routeID == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	if err := h.uc.DeleteRoute(r.Context(), userID.String(), routeID); err != nil {
+		if errors.Is(err, usecase.ErrRouteNotFound) {
+			writeError(w, http.StatusNotFound, "route not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ListRouteTrips godoc
 // @Summary      List trips attached to a route
 // @Tags         routes

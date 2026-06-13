@@ -24,6 +24,7 @@ type TripQueryRepo interface {
 	ListTrips(ctx context.Context, f domain.TripFilter) ([]domain.Trip, string, error)
 	GetTrip(ctx context.Context, userID, tripID string) (domain.Trip, error)
 	GetTripPoints(ctx context.Context, f domain.TripPointFilter) ([]domain.TripPoint, string, error)
+	DeleteTrip(ctx context.Context, userID, tripID string) error
 }
 
 // TripQueryUsecase handles read queries for trips.
@@ -75,6 +76,13 @@ type GetTripInput struct {
 
 func (u *TripQueryUsecase) GetTrip(ctx context.Context, in GetTripInput) (domain.Trip, error) {
 	return u.repo.GetTrip(ctx, in.UserID, in.TripID)
+}
+
+// DeleteTrip removes a trip owned by the user. Cascades to trip points, route
+// matches, and any routes seeded by this trip. Returns ErrTripNotFound if the
+// trip does not exist or is not owned by the user.
+func (u *TripQueryUsecase) DeleteTrip(ctx context.Context, in GetTripInput) error {
+	return u.repo.DeleteTrip(ctx, in.UserID, in.TripID)
 }
 
 // GetTripPointsInput is the caller-supplied filter for trip points.

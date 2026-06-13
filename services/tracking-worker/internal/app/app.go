@@ -107,6 +107,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		MovementGoodPoints:       cfg.GPSMovementGoodPoints,
 		ActivityConfidence:       cfg.GPSActivityConfidence,
 		LateArrivalWindowSec:     cfg.GPSLateArrivalWindowSec,
+		SegmentMaxGapSec:         cfg.GPSSegmentMaxGapSec,
 	}
 	tripCfg := domain.TripDetectionConfig{
 		MotionMinDurationSec: cfg.GPSMovementMinDurationSec,

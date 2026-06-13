@@ -31,4 +31,4 @@ scrape_configs:
           level:
           service:
       - output:
-          source: message
+          source: msg

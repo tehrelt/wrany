@@ -217,9 +217,33 @@ func (h *TrackingQueryHandler) GetTrack(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	speedThreshold, _ := strconv.ParseFloat(q.Get("speed_threshold_mps"), 64)
-	minStaySec, _ := strconv.Atoi(q.Get("min_stay_sec"))
-	minMoveSec, _ := strconv.Atoi(q.Get("min_move_sec"))
+	var speedThreshold *float64
+	if value := q.Get("speed_threshold_mps"); value != "" {
+		parsed, parseErr := strconv.ParseFloat(value, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid speed_threshold_mps")
+			return
+		}
+		speedThreshold = &parsed
+	}
+	var minStaySec *int
+	if value := q.Get("min_stay_sec"); value != "" {
+		parsed, parseErr := strconv.Atoi(value)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid min_stay_sec")
+			return
+		}
+		minStaySec = &parsed
+	}
+	var minMoveSec *int
+	if value := q.Get("min_move_sec"); value != "" {
+		parsed, parseErr := strconv.Atoi(value)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid min_move_sec")
+			return
+		}
+		minMoveSec = &parsed
+	}
 
 	segments, err := h.uc.GetTrack(r.Context(), usecase.GetTrackInput{
 		UserID:            userID.String(),
@@ -243,6 +267,7 @@ func (h *TrackingQueryHandler) GetTrack(w http.ResponseWriter, r *http.Request) 
 	for _, s := range segments {
 		items = append(items, TrackSegmentItem{
 			Kind:            string(s.Kind),
+			SegmentID:       s.SegmentID,
 			EventID:         s.EventID,
 			RecordedAt:      s.RecordedAt.UTC().Format(time.RFC3339),
 			PeriodEnd:       s.PeriodEnd.UTC().Format(time.RFC3339),

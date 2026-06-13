@@ -1,4 +1,5 @@
 import { apiClient } from '@/api/client'
+import { getTrips } from '@/api/generated/trips/trips'
 
 export interface Trip {
   id: string
@@ -55,6 +56,10 @@ export async function getTripPoints(
     { params },
   )
   return res.data.data
+}
+
+export async function deleteTrip(tripId: string): Promise<void> {
+  await getTrips().deleteV1TripsId(tripId)
 }
 
 // Helpers

@@ -6,6 +6,7 @@ import type {
 } from './MapProvider'
 import { getRouteBounds } from './MapProvider'
 import { mapTokens, yandexTelemetryMapStyle } from './yandexTelemetryMapStyle'
+import { buildRoutePolylines, buildTelemetrySegments } from './routeSegments'
 
 const SCRIPT_ID = 'yandex-maps-api-v3'
 const LOAD_TIMEOUT_MS = 10_000
@@ -126,12 +127,11 @@ export class YandexMapProvider implements MapProvider {
     for (const entity of this.entities) this.map.removeChild(entity)
     this.entities = []
 
-    if (state.points.length > 1) {
+    // Continuous base route per run (split only at GPS gaps). Always drawn so
+    // the trace stays continuous even where dense telemetry segments overlap.
+    for (const coordinates of buildRoutePolylines(state.points)) {
       const route = new this.ymaps.YMapFeature({
-        geometry: {
-          type: 'LineString',
-          coordinates: lineCoordinates(state.points),
-        },
+        geometry: { type: 'LineString', coordinates },
         style: {
           stroke: [
             { color: mapTokens.routeGlow, width: 12 },
@@ -141,6 +141,23 @@ export class YandexMapProvider implements MapProvider {
       })
       this.map.addChild(route)
       this.entities.push(route)
+    }
+
+    // Speed-colored segments overlay the base line.
+    if (state.colorByTelemetry) {
+      for (const segment of buildTelemetrySegments(state.points)) {
+        const route = new this.ymaps.YMapFeature({
+          geometry: {
+            type: 'LineString',
+            coordinates: lineCoordinates([segment.from, segment.to]),
+          },
+          style: {
+            stroke: [{ color: segment.color, width: 5, opacity: segment.opacity }],
+          },
+        })
+        this.map.addChild(route)
+        this.entities.push(route)
+      }
     }
 
     const markers = [
