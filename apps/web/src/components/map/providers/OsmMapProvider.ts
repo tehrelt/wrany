@@ -9,6 +9,7 @@ import type {
   MapProviderState,
 } from "./MapProvider";
 import { getRouteBounds } from "./MapProvider";
+import { buildRoutePolylines, buildTelemetrySegments } from "./routeSegments";
 
 const SOURCE_ID = "route";
 const DEFAULT_CENTER: [number, number] = [37.618, 55.751];
@@ -16,15 +17,34 @@ const DEFAULT_CENTER: [number, number] = [37.618, 55.751];
 function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
 
-  if (state.points.length > 1) {
+  // Always draw one continuous MultiLineString (split only at GPS gaps) as the
+  // base route, so dense per-pair telemetry segments dropping out on zoom out
+  // never make the trace look broken.
+  const lines = buildRoutePolylines(state.points);
+  if (lines.length > 0) {
     features.push({
       type: "Feature",
       properties: { role: "route" },
-      geometry: {
-        type: "LineString",
-        coordinates: state.points.map((point) => [point.lon, point.lat]),
-      },
+      geometry: { type: "MultiLineString", coordinates: lines },
     });
+  }
+
+  // Speed-colored segments are an overlay on top of the base line.
+  if (state.colorByTelemetry) {
+    for (const segment of buildTelemetrySegments(state.points)) {
+      features.push({
+        type: "Feature",
+        properties: {
+          role: "route-segment",
+          color: segment.color,
+          opacity: segment.opacity,
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: [[segment.from.lon, segment.from.lat], [segment.to.lon, segment.to.lat]],
+        },
+      });
+    }
   }
 
   const markers = [
@@ -186,7 +206,23 @@ export class OsmMapProvider implements MapProvider {
       },
       paint: {
         "line-color": "#45b936",
-        "line-width": 4,
+        // Thinner when zoomed out, thicker when zoomed in.
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4, 18, 6.5],
+      },
+    });
+    this.map.addLayer({
+      id: "route-segments",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "route-segment"],
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": ["get", "color"],
+        "line-width": 5,
+        "line-opacity": ["get", "opacity"],
       },
     });
 

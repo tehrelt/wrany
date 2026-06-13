@@ -21,6 +21,7 @@ export interface RouteMapProps {
   selectedPoint?: MapPoint | null
   startPoint?: MapPoint
   finishPoint?: MapPoint
+  colorByTelemetry?: boolean
   height?: string | number
   provider?: MapProviderType
   onProviderFallback?: (from: string, to: string, reason: string) => void
@@ -60,6 +61,7 @@ export function RouteMap({
   selectedPoint,
   startPoint,
   finishPoint,
+  colorByTelemetry = false,
   height = '100%',
   provider = 'auto',
   onProviderFallback,
@@ -67,13 +69,13 @@ export function RouteMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const providerRef = useRef<MapProvider | null>(null)
   const fallbackRef = useRef(onProviderFallback)
-  const stateRef = useRef<MapProviderState>({ points, selectedPoint, startPoint, finishPoint })
+  const stateRef = useRef<MapProviderState>({ points, selectedPoint, startPoint, finishPoint, colorByTelemetry })
   const manualSelectionRef = useRef(false)
   const [activeProvider, setActiveProvider] = useState<ResolvedMapProviderType>(() => getInitialProvider(provider))
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   fallbackRef.current = onProviderFallback
-  stateRef.current = { points, selectedPoint, startPoint, finishPoint }
+  stateRef.current = { points, selectedPoint, startPoint, finishPoint, colorByTelemetry }
 
   useEffect(() => {
     manualSelectionRef.current = false
@@ -135,13 +137,19 @@ export function RouteMap({
     }
   }, [activeProvider, provider])
 
-  useEffect(() => providerRef.current?.update(stateRef.current), [points, selectedPoint, startPoint, finishPoint])
+  useEffect(() => providerRef.current?.update(stateRef.current), [points, selectedPoint, startPoint, finishPoint, colorByTelemetry])
 
   const isDark = activeProvider === 'maplibre-vector'
   const overlayBg = isDark ? 'bg-[#0a0e14]/85' : 'bg-white/90'
   const overlayBorder = isDark ? 'border-[#1e2c40]/80' : 'border-slate-400/70'
   const overlayText = isDark ? 'text-[#4a6688]' : 'text-slate-700'
   const overlayTextBright = isDark ? 'text-[#39d353]' : 'text-slate-800'
+  const speeds = colorByTelemetry
+    ? points.flatMap(point => point.speedMps == null ? [] : [point.speedMps])
+    : []
+  const minSpeed = speeds.length > 0 ? Math.min(...speeds) : 0
+  const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0
+  const middleSpeed = (minSpeed + maxSpeed) / 2
 
   return (
     <div
@@ -211,8 +219,28 @@ export function RouteMap({
       </div>
 
       <div className={`absolute bottom-3 right-3 z-20 hidden items-center gap-2 border ${overlayBorder} ${overlayBg} px-3 py-2 shadow-sm backdrop-blur sm:flex`}>
-        <Route className={`size-3.5 ${isDark ? 'text-[#39d353]' : 'text-primary'}`} />
-        <span className={`font-mono text-[8px] font-bold uppercase tracking-[0.12em] ${overlayText}`}>{points.length} route nodes</span>
+        {colorByTelemetry ? (
+          <div className="w-44">
+            <div className={`mb-1 flex justify-between font-mono text-[8px] font-bold uppercase tracking-[0.1em] ${overlayText}`}>
+              <span>Speed</span>
+              <span>m/s</span>
+            </div>
+            <div
+              className="h-2 rounded-full"
+              style={{ background: 'linear-gradient(90deg, hsl(210 88% 54%), hsl(105 88% 54%), hsl(0 88% 54%))' }}
+            />
+            <div className={`mt-1 flex justify-between font-mono text-[8px] font-bold tabular-nums ${overlayTextBright}`}>
+              <span>{minSpeed.toFixed(1)}</span>
+              <span>{middleSpeed.toFixed(1)}</span>
+              <span>{maxSpeed.toFixed(1)}</span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Route className={`size-3.5 ${isDark ? 'text-[#39d353]' : 'text-primary'}`} />
+            <span className={`font-mono text-[8px] font-bold uppercase tracking-[0.12em] ${overlayText}`}>{points.length} route nodes</span>
+          </>
+        )}
       </div>
     </div>
   )

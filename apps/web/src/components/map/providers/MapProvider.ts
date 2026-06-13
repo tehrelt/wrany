@@ -4,7 +4,14 @@ export type ResolvedMapProviderType = Exclude<MapProviderType, "auto">;
 export interface MapPoint {
   lat: number;
   lon: number;
+  segmentId?: number;
   recordedAt?: string;
+  speedMps?: number | null;
+  // Optional metadata shown in hover / click point details.
+  accuracyM?: number | null;
+  activityType?: string | null;
+  kind?: string | null;
+  eventId?: string | null;
 }
 
 export interface MapProviderState {
@@ -12,6 +19,7 @@ export interface MapProviderState {
   selectedPoint?: MapPoint | null;
   startPoint?: MapPoint;
   finishPoint?: MapPoint;
+  colorByTelemetry?: boolean;
 }
 
 export interface MapProviderOptions extends MapProviderState {

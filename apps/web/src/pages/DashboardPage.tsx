@@ -87,7 +87,12 @@ export function DashboardPage({ onLogout }: Props) {
   const mapPoints = segments.map(segment => ({
     lat: segment.lat,
     lon: segment.lon,
+    segmentId: segment.segment_id,
     recordedAt: segment.recorded_at,
+    speedMps: segment.speed_mps,
+    accuracyM: segment.accuracy_m,
+    kind: segment.kind,
+    eventId: segment.event_id,
   }))
   const loading = trackQuery.isLoading || summaryQuery.isLoading
   const filters = (
@@ -132,6 +137,7 @@ export function DashboardPage({ onLogout }: Props) {
               <div className="h-[420px] lg:h-[520px]">
                 <RouteMap
                   points={mapPoints}
+                  colorByTelemetry
                   selectedPoint={selectedSegment ? {
                     lat: selectedSegment.lat,
                     lon: selectedSegment.lon,

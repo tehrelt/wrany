@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { formatISO, subHours } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -62,6 +62,14 @@ export function TrackingFilters({
   onRefresh,
 }: Props) {
   const [advanced, setAdvanced] = useState(false)
+  const [draftSettings, setDraftSettings] = useState(settings)
+
+  useEffect(() => setDraftSettings(settings), [settings])
+
+  const settingsChanged =
+    draftSettings.speedThresholdMps !== settings.speedThresholdMps
+    || draftSettings.minStaySec !== settings.minStaySec
+    || draftSettings.minMoveSec !== settings.minMoveSec
 
   return (
     <div className="space-y-5">
@@ -85,16 +93,24 @@ export function TrackingFilters({
         {advanced ? (
           <div className="mt-5 space-y-6">
             <div>
-              <FilterLabel value={`${settings.speedThresholdMps.toFixed(1)} M/S`}>Movement gate</FilterLabel>
-              <Slider min={0.5} max={10} step={0.5} value={[settings.speedThresholdMps]} onValueChange={([value]) => onSettingsChange({ ...settings, speedThresholdMps: value })} />
+              <FilterLabel value={`${draftSettings.speedThresholdMps.toFixed(1)} M/S`}>Movement gate</FilterLabel>
+              <Slider min={0.1} max={3} step={0.1} value={[draftSettings.speedThresholdMps]} onValueChange={([value]) => setDraftSettings(current => ({ ...current, speedThresholdMps: value }))} />
             </div>
             <div>
-              <FilterLabel value={`${settings.minStaySec} SEC`}>Minimum stop</FilterLabel>
-              <Slider min={0} max={600} step={30} value={[settings.minStaySec]} onValueChange={([value]) => onSettingsChange({ ...settings, minStaySec: value })} />
+              <FilterLabel value={`${draftSettings.minStaySec} SEC`}>Minimum stop</FilterLabel>
+              <Slider min={0} max={600} step={15} value={[draftSettings.minStaySec]} onValueChange={([value]) => setDraftSettings(current => ({ ...current, minStaySec: value }))} />
             </div>
             <div>
-              <FilterLabel value={`${settings.minMoveSec} SEC`}>Minimum movement</FilterLabel>
-              <Slider min={0} max={300} step={10} value={[settings.minMoveSec]} onValueChange={([value]) => onSettingsChange({ ...settings, minMoveSec: value })} />
+              <FilterLabel value={`${draftSettings.minMoveSec} SEC`}>Minimum movement</FilterLabel>
+              <Slider min={0} max={180} step={5} value={[draftSettings.minMoveSec]} onValueChange={([value]) => setDraftSettings(current => ({ ...current, minMoveSec: value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" disabled={!settingsChanged} onClick={() => setDraftSettings(defaultTrackSettings)}>
+                Reset
+              </Button>
+              <Button type="button" disabled={!settingsChanged || loading} onClick={() => onSettingsChange(draftSettings)}>
+                Apply
+              </Button>
             </div>
           </div>
         ) : null}

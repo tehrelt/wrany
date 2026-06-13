@@ -30,12 +30,20 @@ const trackLineLayer: LayerProps = {
   id: 'track-line',
   type: 'line',
   filter: ['==', '$type', 'LineString'],
-  paint: { 'line-color': '#3b82f6', 'line-width': 2 },
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  // Thinner when zoomed out, thicker when zoomed in.
+  paint: {
+    'line-color': '#3b82f6',
+    'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 14, 2.5, 18, 4],
+  },
 }
 
 const movePointsLayer: LayerProps = {
   id: 'points-circle',
   type: 'circle',
+  // Per-GPS-point dots are a debug overlay. Hidden on zoom out where they would
+  // scatter and make the route look broken; shown only when zoomed in (>= 16).
+  minzoom: 16,
   filter: ['==', '$type', 'Point'],
   paint: {
     'circle-radius': 4,
