@@ -114,29 +114,37 @@ func (u *TripDetectionUseCase) ProcessBatch(
 		switch result.NewState.State {
 		case domain.StateIdle:
 			if moving {
-				at, id := point.RecordedAt, point.EventID
-				result.NewState.State = domain.StateMotionCandidate
-				result.NewState.CandidateStartedAt = &at
-				result.NewState.CandidateStartPointID = &id
-				result.NewState.CandidateStartLat = &lat
-				result.NewState.CandidateStartLon = &lon
-				result.NewState.CandidateDistanceM = 0
-				result.NewState.CandidateGoodPoints = 1
+				startCandidate(&result.NewState, point, lat, lon)
 				candidateWindow = append(candidateWindow, *point)
 				candidatePoints = append(candidatePoints, tp)
 			}
 
 		case domain.StateMotionCandidate:
-			if !moving {
+			// A real stop, or a long gap since the previous point, abandons the
+			// unconfirmed candidate. An isolated jitter point does NOT: we simply
+			// don't count it and wait for the next point, so genuine movement
+			// peppered with GPS noise still confirms with the correct start time.
+			gapExceeded := result.NewState.LastProcessedAt != nil &&
+				point.RecordedAt.Sub(*result.NewState.LastProcessedAt) >
+					time.Duration(u.cfg.StopMinDurationSec)*time.Second
+			if point.IsStationary || gapExceeded {
 				resetCandidate(&result.NewState)
 				candidateWindow = nil
 				candidatePoints = nil
+				if moving { // this point may itself open a fresh candidate
+					startCandidate(&result.NewState, point, lat, lon)
+					candidateWindow = append(candidateWindow, *point)
+					candidatePoints = append(candidatePoints, tp)
+				}
 				break
 			}
-			result.NewState.CandidateDistanceM += point.DistanceDeltaM
-			result.NewState.CandidateGoodPoints++
+
 			candidateWindow = append(candidateWindow, *point)
 			candidatePoints = append(candidatePoints, tp)
+			if moving {
+				result.NewState.CandidateDistanceM += point.DistanceDeltaM
+				result.NewState.CandidateGoodPoints++
+			}
 
 			duration := point.RecordedAt.Sub(*result.NewState.CandidateStartedAt)
 			enoughWindow := u.movement.Analyze(candidateWindow) ||
@@ -231,6 +239,18 @@ func (u *TripDetectionUseCase) ProcessBatch(
 	result.NewState.LastWatermarkAt = &watermark
 	result.NewState.UpdatedAt = now
 	return result
+}
+
+// startCandidate opens a fresh motion candidate anchored at point.
+func startCandidate(state *domain.TripDetectionState, point *domain.ProcessedLocationPoint, lat, lon float64) {
+	at, id := point.RecordedAt, point.EventID
+	state.State = domain.StateMotionCandidate
+	state.CandidateStartedAt = &at
+	state.CandidateStartPointID = &id
+	state.CandidateStartLat = &lat
+	state.CandidateStartLon = &lon
+	state.CandidateDistanceM = 0
+	state.CandidateGoodPoints = 1
 }
 
 func resetCandidate(state *domain.TripDetectionState) {

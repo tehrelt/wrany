@@ -508,3 +508,94 @@ func TestApplyBatch_StoresProcessedPoint(t *testing.T) {
 	assert.True(t, accepted)
 	assert.InDelta(t, filteredLat, storedLat, 0.000001)
 }
+
+// processedFor builds a processing result for a raw point at a given algorithm version.
+func processedFor(raw domain.RawLocationPoint, version int16, processedAt time.Time) domain.ProcessedLocationPoint {
+	lat, lon := raw.Lat, raw.Lon
+	return domain.ProcessedLocationPoint{
+		UserID: raw.UserID, DeviceID: raw.DeviceID, EventID: raw.EventID,
+		RawLat: raw.Lat, RawLon: raw.Lon,
+		FilteredLat: &lat, FilteredLon: &lon,
+		AccuracyM: raw.AccuracyM, SpeedMps: raw.SpeedMps,
+		IsAccepted: true, RecordedAt: raw.RecordedAt, ReceivedAt: raw.ReceivedAt,
+		ProcessedAt: processedAt, AlgorithmVersion: version,
+	}
+}
+
+func TestFetchPointsForReprocessing_SelectsMissingAndStale(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	rawRepo := postgres.NewRawLocationRepo(db)
+	tripRepo := postgres.NewTripRepo(db)
+	ctx := context.Background()
+	userID, deviceID := newPair()
+	base := now().Add(-10 * time.Minute)
+
+	pts := seedPoints(t, rawRepo, userID, deviceID, base, 3, 1.5)
+	stale, current, neverProcessed := pts[0], pts[1], pts[2]
+
+	// stale -> processed at version 1; current -> processed at version 2; last -> never processed.
+	require.NoError(t, tripRepo.UpsertProcessedPoints(ctx, []domain.ProcessedLocationPoint{
+		processedFor(stale, 1, now()),
+		processedFor(current, 2, now()),
+	}))
+
+	from, to := base.Add(-time.Minute), base.Add(time.Minute)
+	got, err := tripRepo.FetchPointsForReprocessing(ctx, userID, deviceID, from, to, 2)
+	require.NoError(t, err)
+
+	ids := map[string]bool{}
+	for _, p := range got {
+		ids[p.EventID] = true
+	}
+	assert.True(t, ids[stale.EventID], "stale (version < current) must be selected")
+	assert.True(t, ids[neverProcessed.EventID], "never-processed must be selected")
+	assert.False(t, ids[current.EventID], "already-current version must be skipped")
+}
+
+func TestUpsertProcessedPoints_OnlyUpdatesWhenVersionOlder(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	rawRepo := postgres.NewRawLocationRepo(db)
+	tripRepo := postgres.NewTripRepo(db)
+	ctx := context.Background()
+	userID, deviceID := newPair()
+	recordedAt := now().Add(-time.Minute)
+	raw := makeRawPoint(userID, deviceID, recordedAt, 1.5)
+	require.NoError(t, rawRepo.Insert(ctx, raw))
+
+	// Seed version 1 with a known distance.
+	v1 := processedFor(raw, 1, now())
+	v1.DistanceDeltaM = 10
+	require.NoError(t, tripRepo.UpsertProcessedPoints(ctx, []domain.ProcessedLocationPoint{v1}))
+
+	readBack := func() (int16, float64) {
+		var version int16
+		var distance float64
+		require.NoError(t, db.QueryRow(ctx, `
+			SELECT algorithm_version, distance_delta_m
+			FROM processed_location_points
+			WHERE user_id = $1 AND device_id = $2 AND event_id = $3`,
+			userID, deviceID, raw.EventID,
+		).Scan(&version, &distance))
+		return version, distance
+	}
+
+	// Newer version updates derived fields in place.
+	v2 := processedFor(raw, 2, now())
+	v2.DistanceDeltaM = 22
+	require.NoError(t, tripRepo.UpsertProcessedPoints(ctx, []domain.ProcessedLocationPoint{v2}))
+	version, distance := readBack()
+	assert.Equal(t, int16(2), version)
+	assert.Equal(t, 22.0, distance)
+
+	// Same/older version must be a no-op (WHERE version < EXCLUDED.version is false).
+	stale := processedFor(raw, 1, now())
+	stale.DistanceDeltaM = 999
+	require.NoError(t, tripRepo.UpsertProcessedPoints(ctx, []domain.ProcessedLocationPoint{stale}))
+	version, distance = readBack()
+	assert.Equal(t, int16(2), version, "older version must not downgrade the row")
+	assert.Equal(t, 22.0, distance, "older version must not overwrite derived fields")
+}

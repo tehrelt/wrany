@@ -46,6 +46,7 @@ type Config struct {
 	GPSMovementGoodPoints       int
 	GPSActivityConfidence       float64
 	GPSLateArrivalWindowSec     int
+	GPSSegmentMaxGapSec         int
 	TripStopMinDurationSec      int
 }
 
@@ -95,6 +96,7 @@ func Load() (Config, error) {
 		GPSMovementGoodPoints:       envInt("GPS_MOVEMENT_GOOD_POINTS", 3),
 		GPSActivityConfidence:       envFloat("GPS_ACTIVITY_CONFIDENCE", 0.6),
 		GPSLateArrivalWindowSec:     envInt("GPS_LATE_ARRIVAL_WINDOW_SEC", 45),
+		GPSSegmentMaxGapSec:         envInt("GPS_SEGMENT_MAX_GAP_SEC", 120),
 		TripStopMinDurationSec:      envInt("TRIP_STOP_MIN_DURATION_SEC", 180),
 	}, nil
 }

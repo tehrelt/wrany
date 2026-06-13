@@ -107,6 +107,7 @@ func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domai
 		SpeedMps: raw.SpeedMps, ActivityType: raw.ActivityType,
 		ActivityConfidence: raw.ActivityConfidence,
 		RecordedAt:         raw.RecordedAt, ReceivedAt: raw.ReceivedAt, ProcessedAt: now,
+		AlgorithmVersion: domain.CurrentAlgorithmVersion,
 	}
 	if processedThrough != nil && !raw.RecordedAt.After(*processedThrough) {
 		out.NoiseReason = domain.NoiseLateArrival
@@ -129,14 +130,25 @@ func (p *Pipeline) processOne(history []domain.ProcessedLocationPoint, raw domai
 		return out
 	}
 
-	lat, lon := p.smoother.Smooth(history, raw)
+	// Smoothing only feeds the stored filtered_* coordinates (used for display).
+	// It must not mix points across a long gap, so the smoother sees only history
+	// within SegmentMaxGapSec of this point.
+	smoothHistory := trimWindow(history, raw.RecordedAt, p.cfg.SegmentMaxGapSec)
+	lat, lon := p.smoother.Smooth(smoothHistory, raw)
 	out.FilteredLat, out.FilteredLon = &lat, &lon
 	out.IsAccepted = true
 
 	if previous != nil {
-		prevLat, prevLon, ok := previous.Coordinates()
-		if ok {
-			distance := HaversineM(prevLat, prevLon, lat, lon)
+		gap := raw.RecordedAt.Sub(previous.RecordedAt)
+		switch {
+		case gap > time.Duration(p.cfg.SegmentMaxGapSec)*time.Second:
+			// New segment after a long gap: do not attribute distance across it.
+			out.NoiseReason = domain.NoiseSegmentBreak
+		default:
+			// Distance and jitter are decided on the RAW track. Measuring distance
+			// on the smoothed track makes the moving average lag drop real walking
+			// below the jitter radius, silently losing the trip.
+			distance := HaversineM(previous.RawLat, previous.RawLon, raw.Lat, raw.Lon)
 			radius := clamp((previous.AccuracyM+raw.AccuracyM)/2, p.cfg.NoiseMinRadiusM, p.cfg.NoiseMaxRadiusM)
 			if distance < radius {
 				out.NoiseReason = domain.NoiseJitter
