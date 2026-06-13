@@ -19,9 +19,17 @@ function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
     });
   }
 
+  for (const p of state.points) {
+    features.push({
+      type: "Feature",
+      properties: { role: "node" },
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+    });
+  }
+
   for (const [point, role] of [
-    [state.startPoint, "start"],
-    [state.finishPoint, "finish"],
+    [state.startPoint ?? state.points[0], "start"],
+    [state.finishPoint ?? state.points[state.points.length - 1], "finish"],
     [state.selectedPoint, "selected"],
   ] as const) {
     if (point) {
@@ -50,7 +58,7 @@ export class OpenFreeMapProvider implements MapProvider {
       container,
       center: DEFAULT_CENTER,
       zoom: 11,
-      style: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json",
+      style: "https://tiles.openfreemap.org/styles/dark",
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -159,9 +167,23 @@ export class OpenFreeMapProvider implements MapProvider {
       paint: { "line-color": "#39d353", "line-width": 3.5 },
     });
 
+    this.map.addLayer({
+      id: "route-nodes",
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "node"],
+      paint: {
+        "circle-radius": 3,
+        "circle-color": "#39d353",
+        "circle-opacity": 0.85,
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#0a0e14",
+      },
+    });
+
     for (const [role, color, radius] of [
       ["start", "#39d353", 7],
-      ["finish", "#080c12", 7],
+      ["finish", "#e2e8f0", 7],
       ["selected", "#d88a08", 8],
     ] as const) {
       this.map.addLayer({

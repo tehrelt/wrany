@@ -35,9 +35,9 @@ function createProvider(type: ResolvedMapProviderType): MapProvider {
 
 function getInitialProvider(provider: MapProviderType): ResolvedMapProviderType {
   if (provider === 'osm') return 'osm'
+  if (provider === 'yandex') return 'yandex'
   if (provider === 'yandex-v2') return 'yandex-v2'
-  if (provider === 'maplibre-vector') return 'maplibre-vector'
-  return 'yandex'
+  return 'maplibre-vector'
 }
 
 const PROVIDER_OPTIONS: { value: ResolvedMapProviderType; label: string }[] = [
@@ -85,6 +85,7 @@ export function RouteMap({
     if (!container) return
 
     let cancelled = false
+    let ready = false
     const abortController = new AbortController()
     const mapProvider = createProvider(activeProvider)
     providerRef.current = mapProvider
@@ -93,6 +94,9 @@ export function RouteMap({
 
     const fallback = (reason: string) => {
       if (cancelled) return
+      // Once the provider has loaded, transient tile errors (e.g. while
+      // panning after a filter change) must not switch the provider.
+      if (ready) return
       if (manualSelectionRef.current) {
         setStatus('error')
         return
@@ -112,7 +116,13 @@ export function RouteMap({
       onError: fallback,
       signal: abortController.signal,
     }).then(() => {
-      if (!cancelled) setStatus('ready')
+      if (cancelled) return
+      ready = true
+      setStatus('ready')
+      // Points may have arrived while the map style was still loading; the
+      // update effect's setData is dropped before the source exists. Re-apply
+      // the latest state now that layers are ready.
+      mapProvider.update(stateRef.current)
     }).catch((error: unknown) => {
       fallback(error instanceof Error ? error.message : 'Map initialization failed')
     })
@@ -143,7 +153,7 @@ export function RouteMap({
         background: isDark ? '#0a0e14' : '#e8ecec',
       }}
     >
-      <div ref={containerRef} data-map-provider={activeProvider} data-map-status={status} className="absolute inset-0" />
+      <div ref={containerRef} data-map-provider={activeProvider} data-map-status={status} className="absolute inset-0 h-full w-full" />
 
       {isDark ? (
         <>
