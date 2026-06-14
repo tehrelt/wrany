@@ -7,23 +7,50 @@ import (
 
 type ctxKey int
 
-const requestIDKey ctxKey = iota
+const (
+	requestIDKey ctxKey = iota
+	userIDKey
+	deviceIDKey
+)
 
-// WithRequestID returns a context carrying the given request ID.
 func WithRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
 }
 
-// RequestIDFromContext returns the request ID stored in ctx, or empty string.
 func RequestIDFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(requestIDKey).(string)
 	return v
 }
 
-// FromContext returns a logger enriched with the request_id found in ctx.
+func WithUserID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, userIDKey, id)
+}
+
+func UserIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(userIDKey).(string)
+	return v
+}
+
+func WithDeviceID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, deviceIDKey, id)
+}
+
+func DeviceIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(deviceIDKey).(string)
+	return v
+}
+
+// FromContext returns a logger enriched with request_id, user_id, and device_id from ctx.
 func FromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
+	l := base
 	if id := RequestIDFromContext(ctx); id != "" {
-		return base.With("request_id", id)
+		l = l.With("request_id", id)
 	}
-	return base
+	if id := UserIDFromContext(ctx); id != "" {
+		l = l.With("user_id", id)
+	}
+	if id := DeviceIDFromContext(ctx); id != "" {
+		l = l.With("device_id", id)
+	}
+	return l
 }

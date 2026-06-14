@@ -83,6 +83,18 @@ func (b *Bus) Publish(ctx context.Context, subject string, event events.Envelope
 	return nil
 }
 
+// Ping checks NATS connectivity by verifying the connection state and querying
+// JetStream account info. Used by /readyz health checks.
+func (b *Bus) Ping(ctx context.Context) error {
+	if !b.conn.IsConnected() {
+		return fmt.Errorf("nats: not connected")
+	}
+	if _, err := b.js.AccountInfo(ctx); err != nil {
+		return fmt.Errorf("nats: account info: %w", err)
+	}
+	return nil
+}
+
 // Close drains the connection, flushing pending publishes before closing.
 func (b *Bus) Close() error {
 	if err := b.conn.Drain(); err != nil {
