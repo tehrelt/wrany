@@ -29,6 +29,7 @@ class TrackingForegroundService : Service() {
 
         val wsConnected: Boolean get() = senderRef?.wsConnected ?: false
         val wsLastError: String? get() = senderRef?.wsLastError
+        val authExpired: Boolean get() = senderRef?.authExpired ?: false
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

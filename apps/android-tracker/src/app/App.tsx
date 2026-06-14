@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { clearTokens, getAccessToken } from '../storage/tokenStorage';
+import { getAccessToken } from '../storage/tokenStorage';
+import { syncTokensFromNative } from '../features/tracking/tokenSync';
 import { AuthScreen } from '../screens/AuthScreen';
-import { TrackerScreen } from '../screens/TrackerScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { TrackingStatusScreen } from '../features/tracking/TrackingStatusScreen';
 
-type Tab = 'legacy' | 'background' | 'settings';
+type Tab = 'background' | 'settings';
 
 export function App(): React.JSX.Element {
   const [token, setToken] = useState<string | null>(null);
@@ -15,16 +15,15 @@ export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('background');
 
   useEffect(() => {
-    getAccessToken().then(t => {
-      setToken(t);
-      setLoading(false);
-    });
+    // Absorb any token the background service rotated to while the app was closed
+    // before deciding whether the user is authenticated.
+    syncTokensFromNative()
+      .then(getAccessToken)
+      .then(t => {
+        setToken(t);
+        setLoading(false);
+      });
   }, []);
-
-  function handleSessionExpired(): void {
-    clearTokens().catch(() => {});
-    setToken(null);
-  }
 
   if (loading) return <></>;
 
@@ -50,16 +49,6 @@ export function App(): React.JSX.Element {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, tab === 'legacy' && styles.activeTab]}
-            onPress={() => setTab('legacy')}
-          >
-            <Text
-              style={[styles.tabText, tab === 'legacy' && styles.activeTabText]}
-            >
-              Legacy WS
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.tab, tab === 'settings' && styles.activeTab]}
             onPress={() => setTab('settings')}
           >
@@ -75,9 +64,6 @@ export function App(): React.JSX.Element {
         </View>
         <View style={styles.content}>
           {tab === 'background' && <TrackingStatusScreen />}
-          {tab === 'legacy' && (
-            <TrackerScreen onSessionExpired={handleSessionExpired} />
-          )}
           {tab === 'settings' && <SettingsScreen />}
         </View>
       </SafeAreaView>

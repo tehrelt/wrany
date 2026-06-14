@@ -10,9 +10,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import { WS_URL } from '../../config/env';
+import { getValidToken } from '../../api/httpClient';
 import { getOrCreateDeviceId } from '../../tracker/deviceId';
-import { getAccessToken } from '../../storage/tokenStorage';
+import { getAccessToken, getRefreshToken } from '../../storage/tokenStorage';
+import { apiUrlToWsUrl, getApiUrl } from '../../storage/settingsStorage';
+import { syncTokensFromNative } from './tokenSync';
 import { trackingModule } from './trackingNativeModule';
 import type {
   PermissionsStatus,
@@ -26,6 +28,7 @@ const INITIAL_STATUS: TrackingStatus = {
   serviceRunning: false,
   wsStatus: 'disconnected',
   wsLastError: null,
+  authExpired: false,
   pendingCount: 0,
   failedCount: 0,
   lastLocationTime: null,
@@ -85,7 +88,8 @@ export function TrackingStatusScreen(): React.JSX.Element {
   }, [checkPermissions, refreshStatus]);
 
   useEffect(() => {
-    autoConnectIfReady();
+    // Absorb a background-rotated token pair, then (re)connect if ready.
+    syncTokensFromNative().then(autoConnectIfReady);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -134,18 +138,56 @@ export function TrackingStatusScreen(): React.JSX.Element {
   async function autoConnectIfReady(): Promise<void> {
     try {
       const s = await trackingModule.getTrackingStatus();
-      if (s.serviceRunning) return;
-      const token = await getAccessToken();
-      if (!token) return;
+      if (s.serviceRunning) {
+        // Service alive but it gave up after the refresh token was rejected
+        // (e.g. user re-logged in). Hand it fresh credentials and reconnect.
+        if (s.authExpired) await refreshNativeCredentials();
+        return;
+      }
+      // Cheap pre-check: skip entirely if not logged in.
+      if (!(await getAccessToken())) return;
       const fineOk = await PermissionsAndroid.check(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       );
       if (!fineOk) return;
-      const deviceId = await getOrCreateDeviceId();
-      await trackingModule.enableTracking(deviceId, token, WS_URL);
+      await startNativeTracking();
       await refreshStatus();
     } catch {
       // silent — user can enable manually
+    }
+  }
+
+  // Gathers fresh credentials and hands them to the native foreground service.
+  // The service refreshes the access token itself on a 401, so it also needs
+  // the refresh token and API base URL.
+  async function startNativeTracking(): Promise<void> {
+    const [token, refreshToken, apiUrl, deviceId] = await Promise.all([
+      getValidToken(),
+      getRefreshToken(),
+      getApiUrl(),
+      getOrCreateDeviceId(),
+    ]);
+    await trackingModule.enableTracking(
+      deviceId,
+      token,
+      refreshToken ?? '',
+      apiUrlToWsUrl(apiUrl),
+      apiUrl,
+    );
+  }
+
+  // Pushes a fresh token pair into the running service and forces a reconnect.
+  // Used after re-login when the service had marked itself auth-expired.
+  async function refreshNativeCredentials(): Promise<void> {
+    try {
+      const [token, refreshToken] = await Promise.all([
+        getValidToken(),
+        getRefreshToken(),
+      ]);
+      await trackingModule.updateTokens(token, refreshToken ?? '');
+      await trackingModule.reconnectWs();
+    } catch {
+      // refresh failed — user still needs to re-authenticate
     }
   }
 
@@ -162,13 +204,11 @@ export function TrackingStatusScreen(): React.JSX.Element {
       await requestActivityRecognition();
       await checkPermissions();
 
-      const token = await getAccessToken();
-      if (!token) {
+      if (!(await getAccessToken())) {
         setError('Not authenticated. Please log in again.');
         return;
       }
-      const deviceId = await getOrCreateDeviceId();
-      await trackingModule.enableTracking(deviceId, token, WS_URL);
+      await startNativeTracking();
       await refreshStatus();
     } catch (e: any) {
       setError(e?.message ?? 'Failed to start tracking');

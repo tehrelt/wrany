@@ -69,6 +69,45 @@ EPIC.md (этот файл). Inline comments на нетривиальных м�
 
 ## Implementation Log
 
+### Reliability: WS auth token refresh (background tracker)
+
+**Problem.** The native Android foreground tracking service (`BatchSender`) opened its
+WebSocket with a static `access_token` read from prefs. The gateway rejects an
+invalid/expired token at the HTTP upgrade with 401 (`WSAuthMiddleware`), which surfaces
+in OkHttp as `onFailure(... response.code == 401)`. The service then reconnected with the
+**same stale token**, looping 401 forever — background tracking silently died once the
+short-lived access token expired, with no way to recover without restarting the service.
+
+**Fix.**
+- `BatchSender` now refreshes the token itself on a 401/403 upgrade failure
+  (`POST /v1/auth/refresh`), persists the rotated pair to prefs, and reconnects.
+  Single-flight guard + `MAX_REFRESH_ATTEMPTS` cap prevent refresh/connect storms;
+  on refresh failure it marks `authExpired` and stops the loop until re-login.
+- `enableTracking` now also receives `refresh_token` and `api_url` (the service needs
+  them to refresh without JS).
+- Refresh tokens rotate server-side (each refresh revokes the previous), so JS and native
+  token stores are reconciled (`tokenSync.ts`): JS pushes its rotated pair to native after
+  an HTTP-side refresh; JS pulls the service's pair on app start / screen mount. After
+  re-login the screen pushes fresh creds into a still-running `authExpired` service and
+  reconnects.
+
+**Files.** `BatchSender.kt`, `TrackingModule.kt`, `TrackingForegroundService.kt`,
+`tokenSync.ts`, `httpClient.ts`, `App.tsx`, `TrackingStatusScreen.tsx`,
+`trackingNativeModule.ts`, `types.ts`.
+
+**Verification.** `tsc --noEmit` clean for changed files (3 pre-existing `Platform.Version`
+typing errors unrelated); `eslint` 0 errors. Kotlin not compiled here (no Android SDK in
+this environment) — needs a device/emulator build before closing.
+
+### Removed legacy debug WS tab
+
+Deleted the JS-only "Legacy WS" tracker tab (manual foreground WebSocket via
+`react-native-geolocation-service`), superseded by the native background service.
+Removed: `screens/TrackerScreen.tsx`, `tracker/{trackerSocket,batchQueue,locationService,
+types}.ts`, `__tests__/batchQueue.test.ts`; trimmed `App.tsx` (tab, render,
+`handleSessionExpired`). `tracker/deviceId.ts` kept (used by the native path).
+`tsc`/`eslint` clean, `jest` 2/2 suites pass.
+
 ## Final Report
 
 TBD

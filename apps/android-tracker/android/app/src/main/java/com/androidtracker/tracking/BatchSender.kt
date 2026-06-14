@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.*
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -20,6 +22,9 @@ class BatchSender(
         private const val BATCH_SIZE = 20
         private const val FLUSH_INTERVAL_MS = 15_000L
         private const val MAX_BACKOFF_MS = 30_000L
+        // Cap consecutive token-refresh attempts so a server that rejects even
+        // freshly-minted tokens cannot drive an infinite refresh→connect→401 loop.
+        private const val MAX_REFRESH_ATTEMPTS = 3
     }
 
     private val client = OkHttpClient.Builder()
@@ -34,10 +39,19 @@ class BatchSender(
     private var flushJob: Job? = null
     private var inflight: List<LocationPoint> = emptyList()
 
+    // Single-flight guard: concurrent failures must not fire parallel refreshes.
+    private val refreshing = AtomicBoolean(false)
+    private var refreshAttempt = 0
+
     @Volatile var wsConnected = false
         private set
 
     @Volatile var wsLastError: String? = null
+        private set
+
+    // Set when the refresh token itself is rejected — reconnect loop stops until
+    // the user re-logs in (which calls reconnectNow with a fresh token in prefs).
+    @Volatile var authExpired = false
         private set
 
     fun start() {
@@ -64,13 +78,25 @@ class BatchSender(
         wsConnected = false
         wsLastError = null
         reconnectAttempt = 0
+        refreshAttempt = 0
+        authExpired = false
         connect()
     }
 
     private fun connect() {
-        val token = readPrefs("access_token") ?: run {
-            Log.w(TAG, "No token, delaying reconnect")
-            scheduleReconnect()
+        if (authExpired) {
+            Log.w(TAG, "Auth expired — not connecting until re-login")
+            return
+        }
+        val token = readPrefs("access_token")
+        if (token == null) {
+            // No access token yet — mint one from the refresh token if we have it.
+            if (readPrefs("refresh_token") != null && readPrefs("api_url") != null) {
+                refreshAndReconnect()
+            } else {
+                Log.w(TAG, "No token, delaying reconnect")
+                scheduleReconnect()
+            }
             return
         }
         val wsUrl = readPrefs("ws_url") ?: "ws://10.0.2.2:8080/v1/ws/tracker"
@@ -84,6 +110,7 @@ class BatchSender(
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log.i(TAG, "WS open, sending session.start")
             reconnectAttempt = 0
+            refreshAttempt = 0
             wsConnected = true
             val deviceId = readPrefs("device_id") ?: ""
             val msg = JSONObject().apply {
@@ -127,7 +154,14 @@ class BatchSender(
             sessionAccepted.set(false)
             ws = null
             returnInflightToPending()
-            scheduleReconnect()
+            // The gateway rejects an invalid/expired token at the HTTP upgrade
+            // with 401 (403 if forbidden). Reconnecting with the same stale token
+            // would loop forever — refresh it first.
+            if (response?.code == 401 || response?.code == 403) {
+                refreshAndReconnect()
+            } else {
+                scheduleReconnect()
+            }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -149,6 +183,71 @@ class BatchSender(
             delay(delayMs)
             connect()
         }
+    }
+
+    // Refresh the access token (server-side) then reconnect. Single-flight: a
+    // second caller while a refresh is in progress is a no-op. On refresh failure
+    // the connection is marked auth-expired and the reconnect loop stops.
+    private fun refreshAndReconnect() {
+        if (!refreshing.compareAndSet(false, true)) return
+        scope.launch {
+            try {
+                if (doRefresh()) {
+                    reconnectAttempt = 0
+                    connect()
+                } else {
+                    markAuthExpired()
+                }
+            } finally {
+                refreshing.set(false)
+            }
+        }
+    }
+
+    // POST /v1/auth/refresh with the stored refresh token; persists the new token
+    // pair to prefs on success. Returns false on any failure (caller stops retrying).
+    private fun doRefresh(): Boolean {
+        if (refreshAttempt >= MAX_REFRESH_ATTEMPTS) {
+            Log.w(TAG, "Max refresh attempts reached")
+            return false
+        }
+        refreshAttempt++
+        val rt = readPrefs("refresh_token")
+        val apiUrl = readPrefs("api_url")
+        if (rt == null || apiUrl == null) {
+            Log.w(TAG, "Cannot refresh: missing refresh_token or api_url")
+            return false
+        }
+        return try {
+            val reqBody = JSONObject().put("refresh_token", rt).toString()
+                .toRequestBody("application/json".toMediaType())
+            val req = Request.Builder()
+                .url("$apiUrl/v1/auth/refresh")
+                .post(reqBody)
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Refresh failed: HTTP ${resp.code}")
+                    return false
+                }
+                val data = JSONObject(resp.body?.string() ?: "").getJSONObject("data")
+                writePrefs(
+                    "access_token" to data.getString("access_token"),
+                    "refresh_token" to data.getString("refresh_token"),
+                )
+                Log.i(TAG, "Token refreshed")
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Refresh error: ${e.message}")
+            false
+        }
+    }
+
+    private fun markAuthExpired() {
+        authExpired = true
+        wsLastError = "session expired — please re-login"
+        Log.w(TAG, "Auth refresh failed — stopping reconnect until re-login")
     }
 
     private fun scheduleFlush() {
@@ -239,4 +338,11 @@ class BatchSender(
     private fun readPrefs(key: String): String? =
         context.getSharedPreferences("wrany_tracking", Context.MODE_PRIVATE)
             .getString(key, null)
+
+    private fun writePrefs(vararg pairs: Pair<String, String>) {
+        context.getSharedPreferences("wrany_tracking", Context.MODE_PRIVATE)
+            .edit()
+            .apply { pairs.forEach { (k, v) -> putString(k, v) } }
+            .apply()
+    }
 }
