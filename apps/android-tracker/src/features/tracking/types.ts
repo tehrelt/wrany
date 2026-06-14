@@ -4,6 +4,9 @@ export interface TrackingStatus {
   serviceRunning: boolean;
   wsStatus: WsStatus;
   wsLastError: string | null;
+  // True when the service gave up reconnecting because the refresh token was
+  // rejected. JS must push fresh credentials and reconnect after re-login.
+  authExpired: boolean;
   pendingCount: number;
   failedCount: number;
   lastLocationTime: string | null;

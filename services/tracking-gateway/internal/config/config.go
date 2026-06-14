@@ -20,6 +20,10 @@ type Config struct {
 	NatsURL    string
 	NatsStream string
 
+	// OpenTelemetry
+	OTELEndpoint string
+	OTELEnabled  bool
+
 	// WebSocket
 	WSMaxMessageSizeBytes int64
 	WSReadDeadlineSec     int
@@ -48,7 +52,10 @@ func Load() Config {
 		WSWriteDeadlineSec:    parseInt(getEnv("WS_WRITE_DEADLINE_SEC", "10")),
 		WSPingIntervalSec:     parseInt(getEnv("WS_PING_INTERVAL_SEC", "30")),
 		WSMaxBatchSize:        parseInt(getEnv("WS_MAX_BATCH_SIZE", "100")),
-		WSAllowedOrigins:      parseOrigins(getEnv("WS_ALLOWED_ORIGINS", "")),
+		WSAllowedOrigins: parseOrigins(getEnv("WS_ALLOWED_ORIGINS", "")),
+
+		OTELEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "tempo:4317"),
+		OTELEnabled:  getEnv("OTEL_ENABLED", "") == "true",
 	}
 }
 

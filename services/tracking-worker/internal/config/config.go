@@ -48,6 +48,10 @@ type Config struct {
 	GPSLateArrivalWindowSec     int
 	GPSSegmentMaxGapSec         int
 	TripStopMinDurationSec      int
+
+	// OpenTelemetry
+	OTELEndpoint string
+	OTELEnabled  bool
 }
 
 // Load reads configuration from environment variables.
@@ -98,6 +102,8 @@ func Load() (Config, error) {
 		GPSLateArrivalWindowSec:     envInt("GPS_LATE_ARRIVAL_WINDOW_SEC", 45),
 		GPSSegmentMaxGapSec:         envInt("GPS_SEGMENT_MAX_GAP_SEC", 120),
 		TripStopMinDurationSec:      envInt("TRIP_STOP_MIN_DURATION_SEC", 180),
+		OTELEndpoint:                envDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "tempo:4317"),
+		OTELEnabled:                 envDefault("OTEL_ENABLED", "") == "true",
 	}, nil
 }
 

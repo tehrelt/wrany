@@ -6,7 +6,9 @@ const { TrackingModule } = NativeModules as {
     enableTracking(
       deviceId: string,
       token: string,
+      refreshToken: string,
       wsUrl: string,
+      apiUrl: string,
     ): Promise<void>;
     disableTracking(): Promise<void>;
     getTrackingStatus(): Promise<TrackingStatus>;
@@ -14,6 +16,11 @@ const { TrackingModule } = NativeModules as {
     flushNow(): Promise<void>;
     clearFailed(): Promise<void>;
     updateToken(token: string): Promise<void>;
+    updateTokens(accessToken: string, refreshToken: string): Promise<void>;
+    getStoredTokens(): Promise<{
+      accessToken: string | null;
+      refreshToken: string | null;
+    }>;
     cleanupOldPoints(): Promise<void>;
   };
 };

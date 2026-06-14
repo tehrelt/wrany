@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,21 +63,22 @@ type LocationEventProcessor struct {
 	publisher    eventbus.Publisher
 	producer     string
 	consumerName string
+	log          *slog.Logger
 }
 
 // NewLocationEventProcessor constructs a processor.
-// producer is this service's name (e.g. "tracking-worker") used in events.
-// consumerName is the NATS durable consumer name used in dead-letter payloads.
 func NewLocationEventProcessor(
 	repo RawLocationRepository,
 	publisher eventbus.Publisher,
 	producer, consumerName string,
+	log *slog.Logger,
 ) *LocationEventProcessor {
 	return &LocationEventProcessor{
 		repo:         repo,
 		publisher:    publisher,
 		producer:     producer,
 		consumerName: consumerName,
+		log:          log,
 	}
 }
 
@@ -122,6 +124,8 @@ func (p *LocationEventProcessor) Process(ctx context.Context, input ProcessingIn
 	if err := p.repo.Insert(ctx, point); err != nil {
 		return ProcessingResult{Action: ActionNak}
 	}
+	p.log.DebugContext(ctx, "point inserted", "event_id", env.EventID,
+		"user_id", payload.UserID, "device_id", payload.DeviceID)
 	return ProcessingResult{Action: ActionAck}
 }
 
@@ -157,6 +161,7 @@ func (p *LocationEventProcessor) deadLetter(
 	if err := p.publisher.Publish(ctx, events.SubjectDeadLetter, dlEvent); err != nil {
 		return ProcessingResult{Action: ActionNak}
 	}
+	p.log.WarnContext(ctx, "dead-lettered", "correlation_id", correlationID, "reason", reason)
 	return ProcessingResult{Action: ActionAck}
 }
 

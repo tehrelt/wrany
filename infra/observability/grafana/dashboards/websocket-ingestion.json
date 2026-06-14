@@ -1,7 +1,9 @@
 {
   "title": "WebSocket Ingestion",
   "uid": "wrany-ws-ingestion",
-  "tags": ["wrany"],
+  "tags": [
+    "wrany"
+  ],
   "timezone": "browser",
   "schemaVersion": 37,
   "refresh": "15s",
@@ -10,29 +12,55 @@
       "id": 1,
       "title": "Active WS Connections",
       "type": "stat",
-      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "gateway_ws_connections_active",
           "legendFormat": "active"
         }
       ],
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"}
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      }
     },
     {
       "id": 2,
       "title": "Sessions Accepted / Rejected",
       "type": "timeseries",
-      "gridPos": {"x": 4, "y": 0, "w": 10, "h": 8},
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 10,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_ws_sessions_accepted_total[1m])",
           "legendFormat": "accepted"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_ws_sessions_rejected_total[1m])",
           "legendFormat": "rejected"
         }
@@ -42,10 +70,18 @@
       "id": 3,
       "title": "WS Connections Total Rate",
       "type": "timeseries",
-      "gridPos": {"x": 14, "y": 0, "w": 10, "h": 8},
+      "gridPos": {
+        "x": 14,
+        "y": 0,
+        "w": 10,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_ws_connections_total[1m])",
           "legendFormat": "connections/s"
         }
@@ -55,20 +91,34 @@
       "id": 4,
       "title": "Location Batches Received / Acked / Rejected",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_location_batches_received_total[1m])",
           "legendFormat": "received"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_location_batches_acked_total[1m])",
           "legendFormat": "acked"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_location_batches_rejected_total[1m])",
           "legendFormat": "rejected"
         }
@@ -78,10 +128,18 @@
       "id": 5,
       "title": "Location Points Received",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_location_points_received_total[1m])",
           "legendFormat": "points/s"
         }
@@ -91,19 +149,155 @@
       "id": 6,
       "title": "NATS Publish Errors",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(gateway_nats_publish_errors_total[1m])",
           "legendFormat": "{{subject}} {{error_type}}"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth Success/Failure Rate (req/s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(gateway_auth_requests_total{result=\"success\"}[1m])",
+          "legendFormat": "success",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(gateway_auth_requests_total{result=\"failure\"}[1m])",
+          "legendFormat": "failure",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "NATS Publish Rate (msg/s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(gateway_nats_publish_total[1m])",
+          "legendFormat": "{{subject}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Batch Ack Ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(gateway_location_batches_acked_total[1m]) / rate(gateway_location_batches_received_total[1m])",
+          "legendFormat": "ack ratio",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 9
     }
   ],
   "templating": {
     "list": [
-      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "hide": 0}
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0
+      }
     ]
   }
 }

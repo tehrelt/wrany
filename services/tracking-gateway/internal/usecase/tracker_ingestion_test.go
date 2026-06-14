@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -84,7 +85,7 @@ func (p *mockPublisher) Publish(_ context.Context, _ string, env libevents.Envel
 func ptr[T any](v T) *T { return &v }
 
 func makeUC(devices *mockDeviceLookup, dedup usecase.IngestionDedupRepo, pub *mockPublisher) *usecase.TrackerIngestionUseCase {
-	return usecase.NewTrackerIngestionUseCase(devices, dedup, pub, "test-gateway", 100)
+	return usecase.NewTrackerIngestionUseCase(devices, dedup, pub, "test-gateway", 100, slog.Default())
 }
 
 func validEvent(id string) domain.LocationEvent {

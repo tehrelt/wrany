@@ -5,6 +5,7 @@ import {
   getRefreshToken,
   saveTokens,
 } from '../storage/tokenStorage';
+import { syncTokensToNative } from '../features/tracking/tokenSync';
 
 interface ApiResponse<T> {
   data: T | null;
@@ -50,6 +51,8 @@ async function doRefresh(): Promise<string> {
   }
 
   await saveTokens(json.data.access_token, json.data.refresh_token);
+  // Keep the background service's prefs in sync — the old refresh token is now revoked.
+  await syncTokensToNative(json.data.access_token, json.data.refresh_token);
   return json.data.access_token;
 }
 

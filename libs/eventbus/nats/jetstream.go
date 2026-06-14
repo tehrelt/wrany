@@ -8,10 +8,31 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
 
 	"github.com/wrany/libs/events"
 	"github.com/wrany/libs/eventbus"
 )
+
+// otelCarrier adapts NATS headers to the W3C TextMapCarrier interface.
+type otelCarrier map[string][]string
+
+func (c otelCarrier) Get(key string) string {
+	if v := c[key]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+
+func (c otelCarrier) Set(key, value string) { c[key] = []string{value} }
+
+func (c otelCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
 // dedupWindow is the JetStream duplicate-tracking window. Within this window
 // a repeated Nats-Msg-Id (= envelope event_id) is dropped by the server.
@@ -76,9 +97,22 @@ func (b *Bus) Publish(ctx context.Context, subject string, event events.Envelope
 	if event.CorrelationID != "" {
 		msg.Header.Set(events.HeaderCorrelationID, event.CorrelationID)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, otelCarrier(msg.Header))
 
 	if _, err := b.js.PublishMsg(ctx, msg); err != nil {
 		return fmt.Errorf("%w: subject %q event %q: %w", eventbus.ErrPublish, subject, event.EventID, err)
+	}
+	return nil
+}
+
+// Ping checks NATS connectivity by verifying the connection state and querying
+// JetStream account info. Used by /readyz health checks.
+func (b *Bus) Ping(ctx context.Context) error {
+	if !b.conn.IsConnected() {
+		return fmt.Errorf("nats: not connected")
+	}
+	if _, err := b.js.AccountInfo(ctx); err != nil {
+		return fmt.Errorf("nats: account info: %w", err)
 	}
 	return nil
 }

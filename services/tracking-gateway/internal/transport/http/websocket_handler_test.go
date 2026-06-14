@@ -3,6 +3,7 @@ package http_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -106,7 +107,7 @@ func newWSTestEnv(t *testing.T) *wsTestEnv {
 		WSAllowedOrigins:      []string{"http://localhost:3000"},
 	}
 
-	ingestionUC := usecase.NewTrackerIngestionUseCase(devices, dedup, pub, "test", 100)
+	ingestionUC := usecase.NewTrackerIngestionUseCase(devices, dedup, pub, "test", 100, slog.Default())
 	trackerH := httptransport.NewTrackerHandler(ingestionUC, cfg, nil)
 
 	// Wrap in AuthMiddleware stub that injects the fixed userID.

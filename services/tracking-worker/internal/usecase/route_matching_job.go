@@ -2,14 +2,15 @@ package usecase
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wrany/tracking-worker/internal/domain"
 	routeevents "github.com/wrany/libs/events/route"
 	"github.com/wrany/libs/eventbus"
+	obslogger "github.com/wrany/libs/observability/logger"
+	"github.com/wrany/tracking-worker/internal/domain"
 )
 
 // RouteMatchingRepository is the storage interface required by RouteMatchingJob.
@@ -29,6 +30,7 @@ type RouteMatchingJob struct {
 	uc       *RouteMatchingUseCase
 	pub      eventbus.Publisher
 	producer string
+	log      *slog.Logger
 }
 
 func NewRouteMatchingJob(
@@ -36,12 +38,14 @@ func NewRouteMatchingJob(
 	pub eventbus.Publisher,
 	producer string,
 	cfg domain.RouteMatchConfig,
+	log *slog.Logger,
 ) *RouteMatchingJob {
 	return &RouteMatchingJob{
 		repo:     repo,
 		uc:       NewRouteMatchingUseCase(cfg),
 		pub:      pub,
 		producer: producer,
+		log:      log,
 	}
 }
 
@@ -54,7 +58,7 @@ func (j *RouteMatchingJob) RunOnce(ctx context.Context) error {
 	}
 	for _, trip := range trips {
 		if err := j.processTrip(ctx, trip); err != nil {
-			log.Printf("route_matching_job: trip %s: %v", trip.ID, err)
+			j.log.ErrorContext(ctx, "route matching: process trip", "trip_id", trip.ID, "err", err)
 		}
 	}
 	return nil
@@ -79,7 +83,7 @@ func (j *RouteMatchingJob) processTrip(ctx context.Context, trip domain.Trip) er
 	for _, c := range candidates {
 		tpl, err := j.repo.FindRouteTemplate(ctx, c.ID)
 		if err != nil {
-			log.Printf("route_matching_job: load template %s: %v", c.ID, err)
+			j.log.WarnContext(ctx, "load route template", "route_id", c.ID, "err", err)
 			continue
 		}
 		templateByID[c.ID.String()] = tpl
@@ -90,6 +94,8 @@ func (j *RouteMatchingJob) processTrip(ctx context.Context, trip domain.Trip) er
 	now := time.Now()
 	var routeID uuid.UUID
 	var score float64
+
+	log := obslogger.FromContext(ctx, j.log)
 
 	if match.RouteID == "" {
 		// No match → create new route from this trip.
@@ -123,6 +129,9 @@ func (j *RouteMatchingJob) processTrip(ctx context.Context, trip domain.Trip) er
 		if err := j.repo.InsertRoute(ctx, newRoute); err != nil {
 			return err
 		}
+		log.InfoContext(ctx, "new route created",
+			"route_id", routeID, "trip_id", trip.ID,
+			"user_id", trip.UserID, "distance_m", trip.DistanceM)
 	} else {
 		routeID, err = uuid.Parse(match.RouteID)
 		if err != nil {
@@ -132,6 +141,9 @@ func (j *RouteMatchingJob) processTrip(ctx context.Context, trip domain.Trip) er
 		if err := j.repo.IncrRouteStats(ctx, routeID, trip.ID); err != nil {
 			return err
 		}
+		log.InfoContext(ctx, "route matched",
+			"route_id", routeID, "trip_id", trip.ID,
+			"user_id", trip.UserID, "score", score)
 	}
 
 	rt := domain.RouteTrip{
@@ -165,10 +177,10 @@ func (j *RouteMatchingJob) publishMatched(ctx context.Context, tripID, routeID, 
 		},
 	)
 	if err != nil {
-		log.Printf("route_matching_job: build matched event: %v", err)
+		j.log.ErrorContext(ctx, "build matched event", "err", err)
 		return
 	}
 	if err := j.pub.Publish(ctx, "route.matched.v1", ev); err != nil {
-		log.Printf("route_matching_job: publish matched event: %v", err)
+		j.log.ErrorContext(ctx, "publish matched event", "err", err)
 	}
 }

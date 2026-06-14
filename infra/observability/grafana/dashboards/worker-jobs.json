@@ -1,7 +1,9 @@
 {
   "title": "Worker Jobs",
   "uid": "wrany-worker-jobs",
-  "tags": ["wrany"],
+  "tags": [
+    "wrany"
+  ],
   "timezone": "browser",
   "schemaVersion": 37,
   "refresh": "30s",
@@ -10,10 +12,18 @@
       "id": 1,
       "title": "NATS Messages Consumed",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_nats_messages_consumed_total[1m])",
           "legendFormat": "{{subject}}"
         }
@@ -23,15 +33,26 @@
       "id": 2,
       "title": "Raw Points Inserted / Duplicates",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_raw_points_inserted_total[1m])",
           "legendFormat": "inserted"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_raw_points_duplicate_total[1m])",
           "legendFormat": "duplicates"
         }
@@ -41,10 +62,18 @@
       "id": 3,
       "title": "Trip Detection Runs",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 8, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_trip_detection_runs_total[5m])",
           "legendFormat": "{{result}}"
         }
@@ -54,29 +83,52 @@
       "id": 4,
       "title": "Trip Detection Duration p95",
       "type": "timeseries",
-      "gridPos": {"x": 8, "y": 8, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "histogram_quantile(0.95, rate(worker_trip_detection_run_duration_seconds_bucket[5m]))",
           "legendFormat": "p95"
         }
       ],
-      "fieldConfig": {"defaults": {"unit": "s"}}
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
     },
     {
       "id": 5,
       "title": "Trips Created / Completed",
       "type": "timeseries",
-      "gridPos": {"x": 16, "y": 8, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_trips_created_total[5m])",
           "legendFormat": "created"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_trips_completed_total[5m])",
           "legendFormat": "completed"
         }
@@ -86,10 +138,18 @@
       "id": 6,
       "title": "Route Matching Runs",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_route_matching_runs_total[5m])",
           "legendFormat": "{{result}}"
         }
@@ -99,15 +159,26 @@
       "id": 7,
       "title": "Routes Created / Matched",
       "type": "timeseries",
-      "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_routes_created_total[5m])",
           "legendFormat": "routes created"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_route_matches_total[5m])",
           "legendFormat": "route matches"
         }
@@ -117,19 +188,146 @@
       "id": 8,
       "title": "Dead Letter Published",
       "type": "timeseries",
-      "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "rate(worker_dead_letter_published_total[5m])",
           "legendFormat": "{{reason}}"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route Matching p95 Duration (s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, rate(worker_route_matching_run_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 9
+    },
+    {
+      "type": "timeseries",
+      "title": "NATS Processing Errors (err/s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(worker_nats_message_processing_errors_total[1m])",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 10
+    },
+    {
+      "type": "timeseries",
+      "title": "Trip Detection Errors (err/s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rate(worker_trip_detection_errors_total[1m])",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 11
     }
   ],
   "templating": {
     "list": [
-      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "hide": 0}
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0
+      }
     ]
   }
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/wrany/tracking-gateway/internal/app"
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/migrations"
+	"github.com/wrany/libs/observability/tracing"
 )
 
 // @title          WR any% API
@@ -30,6 +31,17 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})).With("service", "tracking-gateway"))
 
 	cfg := config.Load()
+
+	shutdownTracing, err := tracing.Init(context.Background(), tracing.Config{
+		ServiceName:  "tracking-gateway",
+		OTLPEndpoint: cfg.OTELEndpoint,
+		Enabled:      cfg.OTELEnabled,
+	})
+	if err != nil {
+		slog.Error("tracing init", "err", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(context.Background())
 
 	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/wrany/tracking-worker/internal/app"
 	"github.com/wrany/tracking-worker/internal/config"
+	"github.com/wrany/libs/observability/tracing"
 )
 
 func main() {
@@ -23,6 +24,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	shutdownTracing, err := tracing.Init(ctx, tracing.Config{
+		ServiceName:  "tracking-worker",
+		OTLPEndpoint: cfg.OTELEndpoint,
+		Enabled:      cfg.OTELEnabled,
+	})
+	if err != nil {
+		slog.Error("tracing init", "err", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(context.Background())
 
 	a, err := app.New(ctx, cfg)
 	if err != nil {

@@ -9,7 +9,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	eventbusnats "github.com/wrany/libs/eventbus/nats"
+	obslogger "github.com/wrany/libs/observability/logger"
 	"github.com/wrany/tracking-worker/internal/config"
 	"github.com/wrany/tracking-worker/internal/domain"
 	"github.com/wrany/tracking-worker/internal/observ"
@@ -76,6 +79,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("app: create jetstream consumer: %w", err)
 	}
 
+	log := obslogger.New("tracking-worker")
+
 	// Wire storage → usecase → transport.
 	rawRepo := postgres.NewRawLocationRepo(db)
 	processor := usecase.NewLocationEventProcessor(
@@ -83,6 +88,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		bus,
 		"tracking-worker",
 		cfg.NatsLocationConsumerDurable,
+		log,
 	)
 	locationConsumer := natstransport.NewLocationConsumer(consumer, processor)
 
@@ -120,17 +126,17 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		StopRadiusM:          cfg.GPSStationaryRadiusM,
 		LateArrivalWindowSec: cfg.GPSLateArrivalWindowSec,
 	}
-	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", tripCfg, noiseCfg)
+	tripJob := usecase.NewTripDetectionJob(tripRepo, bus, "tracking-worker", tripCfg, noiseCfg, log)
 
 	routeRepo := postgres.NewRouteRepo(db)
-	routeJob := usecase.NewRouteMatchingJob(routeRepo, bus, "tracking-worker", domain.DefaultRouteMatchConfig())
+	routeJob := usecase.NewRouteMatchingJob(routeRepo, bus, "tracking-worker", domain.DefaultRouteMatchConfig(), log)
 
 	metrics := observ.NewWorkerMetrics()
 
 	return &App{
 		httpSrv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: httptransport.NewRouter(metrics),
+			Handler: otelhttp.NewHandler(httptransport.NewRouter(metrics, db, bus), "tracking-worker"),
 		},
 		locationConsumer: locationConsumer,
 		tripDetectionJob: tripJob,

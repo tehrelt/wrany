@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/wrany/libs/eventbus"
 	liblocation "github.com/wrany/libs/events/location"
+	obslogger "github.com/wrany/libs/observability/logger"
 	"github.com/wrany/tracking-gateway/internal/domain"
 )
+
 
 // DeviceLookup is the narrow interface the ingestion usecase requires.
 // The postgres DeviceRepo satisfies this interface.
@@ -39,6 +42,7 @@ type TrackerIngestionUseCase struct {
 	pub      eventbus.Publisher
 	producer string
 	maxBatch int
+	log      *slog.Logger
 }
 
 // NewTrackerIngestionUseCase constructs the usecase with its dependencies.
@@ -48,6 +52,7 @@ func NewTrackerIngestionUseCase(
 	pub eventbus.Publisher,
 	producer string,
 	maxBatch int,
+	log *slog.Logger,
 ) *TrackerIngestionUseCase {
 	return &TrackerIngestionUseCase{
 		devices:  devices,
@@ -55,6 +60,7 @@ func NewTrackerIngestionUseCase(
 		pub:      pub,
 		producer: producer,
 		maxBatch: maxBatch,
+		log:      log,
 	}
 }
 
@@ -69,12 +75,18 @@ func (uc *TrackerIngestionUseCase) StartSession(ctx context.Context, userID, dev
 		}
 		return nil, fmt.Errorf("tracker ingestion: find device: %w", err)
 	}
-	return &domain.TrackerSession{
+	session := &domain.TrackerSession{
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		DeviceID:  deviceID,
 		StartedAt: time.Now().UTC(),
-	}, nil
+	}
+	obslogger.FromContext(ctx, uc.log).InfoContext(ctx, "session started",
+		"session_id", session.ID,
+		"user_id", userID,
+		"device_id", deviceID,
+	)
+	return session, nil
 }
 
 // IngestBatch validates, deduplicates and publishes a batch of location events.
@@ -168,15 +180,23 @@ func (uc *TrackerIngestionUseCase) IngestBatch(ctx context.Context, session *dom
 
 		// 4. Mark published — conflict is non-fatal (publish already confirmed)
 		if err := uc.dedup.MarkPublished(ctx, session.UserID, session.DeviceID, ev.EventID); err != nil {
-			// Log but do not fail: the event is in NATS; ledger insert failure
-			// means client may see "accepted" again on retry, but JetStream dedup
-			// window will absorb the repeated publish.
-			fmt.Printf("tracker ingestion: mark published failed for %s (non-fatal): %v\n", ev.EventID, err)
+			// ledger insert failure is non-fatal: JetStream dedup window absorbs the retry
+			uc.log.WarnContext(ctx, "mark published failed (non-fatal)",
+				"event_id", ev.EventID, "err", err)
 		}
 
 		result.Accepted = append(result.Accepted, ev.EventID)
 	}
 
+	obslogger.FromContext(ctx, uc.log).InfoContext(ctx, "batch processed",
+		"user_id", session.UserID,
+		"device_id", session.DeviceID,
+		"session_id", session.ID,
+		"batch_size", len(events),
+		"accepted", len(result.Accepted),
+		"duplicated", len(result.Duplicated),
+		"rejected", len(result.Rejected),
+	)
 	return result, nil
 }
 
