@@ -2,12 +2,13 @@ package usecase
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	eventbus "github.com/wrany/libs/eventbus"
 	tripevents "github.com/wrany/libs/events/trip"
+	obslogger "github.com/wrany/libs/observability/logger"
 	"github.com/wrany/tracking-worker/internal/domain"
 	"github.com/wrany/tracking-worker/internal/usecase/noise"
 )
@@ -34,6 +35,7 @@ type TripDetectionJob struct {
 	producer string
 	cfg      domain.TripDetectionConfig
 	noise    *noise.Pipeline
+	log      *slog.Logger
 }
 
 // NewTripDetectionJob wires all dependencies.
@@ -43,6 +45,7 @@ func NewTripDetectionJob(
 	producer string,
 	cfg domain.TripDetectionConfig,
 	noiseCfg domain.NoiseConfig,
+	log *slog.Logger,
 ) *TripDetectionJob {
 	return &TripDetectionJob{
 		repo:     repo,
@@ -51,6 +54,7 @@ func NewTripDetectionJob(
 		producer: producer,
 		cfg:      cfg,
 		noise:    noise.NewPipeline(noiseCfg, nil),
+		log:      log,
 	}
 }
 
@@ -67,7 +71,8 @@ func (j *TripDetectionJob) RunOnce(ctx context.Context) error {
 
 	for _, p := range pairs {
 		if err := j.processPair(ctx, p.UserID, p.DeviceID, now); err != nil {
-			log.Printf("trip_detection_job: pair %s/%s: %v", p.UserID, p.DeviceID, err)
+			j.log.ErrorContext(ctx, "pair processing error",
+				"user_id", p.UserID, "device_id", p.DeviceID, "err", err)
 		}
 	}
 	return nil
@@ -105,14 +110,39 @@ func (j *TripDetectionJob) processPair(ctx context.Context, userID, deviceID uui
 	noiseResult := j.noise.ProcessBatch(history, points, state.LastProcessedAt, now)
 	result := j.uc.ProcessBatch(state, noiseResult.Accepted, now)
 
+	nr := noiseResult
+	obslogger.FromContext(ctx, j.log).DebugContext(ctx, "noise pipeline summary",
+		"user_id", userID, "device_id", deviceID,
+		"raw_count", len(points),
+		"accepted_count", len(nr.Accepted),
+		"processed_count", len(nr.Processed),
+	)
+
 	batch := buildBatch(result)
 	batch.ProcessedPoints = noiseResult.Processed
 	if err := j.repo.ApplyBatch(ctx, batch); err != nil {
 		return err
 	}
 
+	j.logTripCommands(ctx, result.Commands, userID, deviceID)
 	j.publishEvents(ctx, result.Commands, now)
 	return nil
+}
+
+func (j *TripDetectionJob) logTripCommands(ctx context.Context, commands []TripCommand, userID, deviceID uuid.UUID) {
+	log := obslogger.FromContext(ctx, j.log)
+	for _, cmd := range commands {
+		switch cmd.Kind {
+		case CmdCreateTrip:
+			log.InfoContext(ctx, "trip created",
+				"user_id", userID, "device_id", deviceID,
+				"trip_id", cmd.TripID, "started_at", cmd.Trip.StartedAt)
+		case CmdCompleteTrip:
+			log.InfoContext(ctx, "trip completed",
+				"user_id", userID, "device_id", deviceID,
+				"trip_id", cmd.TripID, "ended_at", cmd.EndedAt)
+		}
+	}
 }
 
 // buildBatch translates a ProcessBatchResult into the storage-layer batch struct.
@@ -168,7 +198,7 @@ func (j *TripDetectionJob) publishEvents(ctx context.Context, commands []TripCom
 				},
 			)
 			if buildErr != nil {
-				log.Printf("trip_detection_job: build started event: %v", buildErr)
+				j.log.ErrorContext(ctx, "build started event", "err", buildErr)
 				continue
 			}
 			err = j.pub.Publish(ctx, "trip.started.v1", ev)
@@ -182,7 +212,7 @@ func (j *TripDetectionJob) publishEvents(ctx context.Context, commands []TripCom
 				},
 			)
 			if buildErr != nil {
-				log.Printf("trip_detection_job: build updated event: %v", buildErr)
+				j.log.ErrorContext(ctx, "build updated event", "err", buildErr)
 				continue
 			}
 			err = j.pub.Publish(ctx, "trip.updated.v1", ev)
@@ -196,13 +226,13 @@ func (j *TripDetectionJob) publishEvents(ctx context.Context, commands []TripCom
 				},
 			)
 			if buildErr != nil {
-				log.Printf("trip_detection_job: build completed event: %v", buildErr)
+				j.log.ErrorContext(ctx, "build completed event", "err", buildErr)
 				continue
 			}
 			err = j.pub.Publish(ctx, "trip.completed.v1", ev)
 		}
 		if err != nil {
-			log.Printf("trip_detection_job: publish %d: %v", cmd.Kind, err)
+			j.log.ErrorContext(ctx, "publish event", "kind", cmd.Kind, "err", err)
 		}
 	}
 }

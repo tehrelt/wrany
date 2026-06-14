@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func envelopeBytes(t *testing.T, payload location.Payload) []byte {
 }
 
 func newProcessor(repo usecase.RawLocationRepository, pub *fakePublisher) *usecase.LocationEventProcessor {
-	return usecase.NewLocationEventProcessor(repo, pub, "tracking-worker", "tracking-worker-location-consumer")
+	return usecase.NewLocationEventProcessor(repo, pub, "tracking-worker", "tracking-worker-location-consumer", slog.Default())
 }
 
 // ---- tests ----
