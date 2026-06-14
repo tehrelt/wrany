@@ -249,3 +249,32 @@ func TestGetFastSegments_DoesNotCrossSegmentBreak(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, segments)
 }
+
+func TestGetFastSegments_UsesPerDeviceBaseline(t *testing.T) {
+	base := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	points := make([]domain.FastSegmentSourcePoint, 0)
+	for deviceIndex, deviceID := range []string{"slow", "fast"} {
+		lon := 37.0 + float64(deviceIndex)
+		speed := float64(deviceIndex+1) * 4
+		for i := range 5 {
+			points = append(points, domain.FastSegmentSourcePoint{
+				DeviceID: deviceID, EventID: fmt.Sprintf("%s-%d", deviceID, i),
+				RecordedAt: base.Add(time.Duration(i) * 10 * time.Second),
+				Lat:        55, Lon: lon, SegmentID: deviceIndex + 1,
+			})
+			lon += speed * 10 / (111320 * math.Cos(55*math.Pi/180))
+		}
+	}
+	uc := usecase.NewTrackingQueryUsecase(&stubTrackingQueryRepo{fastSegmentPoints: points})
+
+	segments, err := uc.GetFastSegments(context.Background(), usecase.GetFastSegmentsInput{
+		UserID: "u1", From: base.Add(-time.Minute), To: base.Add(time.Minute),
+		Preset: domain.FastSegmentPresetSoft, Limit: 5,
+	})
+	require.NoError(t, err)
+	require.Len(t, segments, 2)
+	for _, segment := range segments {
+		assert.InDelta(t, 0, segment.UpliftPercent, 0.01)
+		assert.InDelta(t, segment.AvgSpeedMps, segment.BaselineSpeedMps, 0.01)
+	}
+}

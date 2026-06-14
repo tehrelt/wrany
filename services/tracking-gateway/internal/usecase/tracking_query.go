@@ -203,14 +203,26 @@ func (u *TrackingQueryUsecase) GetFastSegments(
 		return []domain.FastSegment{}, nil
 	}
 
-	speeds := make([]float64, 0, len(edges))
+	edgesByDevice := make(map[string][]speedEdge)
 	for _, edge := range edges {
-		speeds = append(speeds, edge.speedMps)
+		edgesByDevice[edge.from.DeviceID] = append(edgesByDevice[edge.from.DeviceID], edge)
 	}
-	slices.Sort(speeds)
-	baseline := percentile(speeds, 0.5)
-	threshold := percentile(speeds, cfg.percentile)
-	segments := collectFastSegments(edges, threshold, baseline, cfg.minDuration)
+
+	segments := make([]domain.FastSegment, 0)
+	for _, deviceEdges := range edgesByDevice {
+		speeds := make([]float64, 0, len(deviceEdges))
+		for _, edge := range deviceEdges {
+			speeds = append(speeds, edge.speedMps)
+		}
+		slices.Sort(speeds)
+		baseline := percentile(speeds, 0.5)
+		threshold := percentile(speeds, cfg.percentile)
+		segments = append(
+			segments,
+			collectFastSegments(deviceEdges, threshold, baseline, cfg.minDuration)...,
+		)
+	}
+
 	slices.SortFunc(segments, func(a, b domain.FastSegment) int {
 		if a.UpliftPercent > b.UpliftPercent {
 			return -1
