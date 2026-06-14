@@ -10,6 +10,7 @@ import (
 
 	"github.com/wrany/libs/eventbus"
 	natseventbus "github.com/wrany/libs/eventbus/nats"
+	obslogger "github.com/wrany/libs/observability/logger"
 	"github.com/wrany/tracking-gateway/internal/config"
 	"github.com/wrany/tracking-gateway/internal/observ"
 	"github.com/wrany/tracking-gateway/internal/storage/postgres"
@@ -64,12 +65,14 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	slog.Info("nats: connected", "url", cfg.NatsURL, "stream", cfg.NatsStream)
 	var pub eventbus.Publisher = natsBus
 
+	log := obslogger.New("tracking-gateway")
 	trackerUC := usecase.NewTrackerIngestionUseCase(
 		deviceRepo,
 		dedupRepo,
 		pub,
 		"tracking-gateway",
 		cfg.WSMaxBatchSize,
+		log,
 	)
 
 	metrics := observ.NewGatewayMetrics()
@@ -86,6 +89,8 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		JWTSecret:     []byte(cfg.JWTSecret),
 		Config:        cfg,
 		Metrics:       metrics,
+		DB:            db,
+		NATS:          natsBus,
 	})
 
 	return &App{

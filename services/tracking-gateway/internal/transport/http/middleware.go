@@ -120,6 +120,7 @@ func WSAuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx = obslogger.WithUserID(ctx, userID.String())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

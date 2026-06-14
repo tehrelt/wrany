@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	obsmiddleware "github.com/wrany/libs/observability/middleware"
 	"github.com/wrany/tracking-gateway/internal/config"
@@ -22,6 +23,8 @@ type RouterDeps struct {
 	JWTSecret     []byte
 	Config        config.Config
 	Metrics       *observ.GatewayMetrics
+	DB            *pgxpool.Pool
+	NATS          NATSPinger
 }
 
 // NewRouter returns the full HTTP handler chain:
@@ -41,7 +44,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	// Observability endpoints — no auth, no logging overhead.
 	mux.Handle("GET /metrics", promhttp.HandlerFor(deps.Metrics.Registry(), promhttp.HandlerOpts{}))
-	mux.HandleFunc("/healthz", HealthzHandler)
+	healthH := &HealthHandler{db: deps.DB, nats: deps.NATS}
+	mux.HandleFunc("/healthz", healthH.Liveness)
+	mux.HandleFunc("GET /readyz", healthH.Readiness)
 	mux.HandleFunc("GET /swagger/doc.json", SwaggerDocHandler)
 
 	mux.HandleFunc("POST /v1/auth/register", authH.Register)
