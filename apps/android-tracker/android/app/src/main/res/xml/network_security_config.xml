@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MVP: the tracker talks to a LAN/ZeroTier backend over plain HTTP. This config
+  takes precedence over android:usesCleartextTraffic (which the RN gradle plugin
+  forces to false in release builds), so cleartext stays allowed in every build.
+  Tighten or scope to specific domains before any production deployment.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
