@@ -1,5 +1,38 @@
 import { describe, expect, it, test } from 'vitest'
-import { buildRoutePolylines, buildTelemetrySegments } from './routeSegments'
+import { buildRoutePolylines, buildTelemetrySegments, percentileRank, speedColor } from './routeSegments'
+
+describe('percentileRank', () => {
+  it('returns 0 for empty or single-element lists', () => {
+    expect(percentileRank([], 5)).toBe(0)
+    expect(percentileRank([3], 3)).toBe(0)
+  })
+
+  it('maps the slowest to 0 and the fastest to 1', () => {
+    const sorted = [1, 2, 3, 4, 5]
+    expect(percentileRank(sorted, 1)).toBe(0)
+    expect(percentileRank(sorted, 5)).toBe(1)
+    expect(percentileRank(sorted, 3)).toBe(0.5)
+  })
+
+  it('spreads clustered values by distribution, not magnitude', () => {
+    // Mostly-slow data with one fast burst: the median still lands mid-ramp.
+    const sorted = [0.01, 0.02, 0.02, 0.03, 0.03, 0.04, 3.5].sort((a, b) => a - b)
+    expect(percentileRank(sorted, 0.03)).toBeGreaterThan(0.3)
+    expect(percentileRank(sorted, 0.03)).toBeLessThan(0.8)
+  })
+})
+
+describe('speedColor', () => {
+  it('returns distinct ramp endpoints for slow vs fast', () => {
+    expect(speedColor(0)).toBe('rgb(37, 99, 235)')
+    expect(speedColor(1)).toBe('rgb(239, 68, 68)')
+  })
+
+  it('interpolates between stops', () => {
+    // Halfway between blue(0) and cyan(0.25) stops.
+    expect(speedColor(0.125)).toBe('rgb(22, 141, 224)')
+  })
+})
 
 describe('buildTelemetrySegments', () => {
   test('fades old segments and colors by speed', () => {

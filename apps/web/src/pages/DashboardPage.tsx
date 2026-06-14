@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Activity, Crosshair, Gauge, Radio, Satellite, Timer } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -21,6 +21,7 @@ import {
   type TrackSegment,
 } from '@/features/tracking/trackingApi'
 import { useAuth } from '@/features/auth/useAuth'
+import { useSearchParamState } from '@/lib/useSearchParamState'
 
 interface Props {
   onLogout: () => void
@@ -44,9 +45,12 @@ function formatDuration(seconds = 0): string {
 
 export function DashboardPage({ onLogout }: Props) {
   const { token } = useAuth()
-  const [deviceId, setDeviceId] = useState('')
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(defaultTo)
+  // Defaults are computed once so an absent search param does not drift each render.
+  const initialFrom = useRef(defaultFrom()).current
+  const initialTo = useRef(defaultTo()).current
+  const [deviceId, setDeviceId] = useSearchParamState('device', '')
+  const [from, setFrom] = useSearchParamState('from', initialFrom)
+  const [to, setTo] = useSearchParamState('to', initialTo)
   const [revision, setRevision] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trackSettings, setTrackSettings] = useTrackSettings()
@@ -138,6 +142,7 @@ export function DashboardPage({ onLogout }: Props) {
                 <RouteMap
                   points={mapPoints}
                   colorByTelemetry
+                  fadeByRecency
                   selectedPoint={selectedSegment ? {
                     lat: selectedSegment.lat,
                     lon: selectedSegment.lon,
