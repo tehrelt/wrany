@@ -4,11 +4,14 @@ import type {
   Map as MapLibreMap,
 } from "maplibre-gl";
 import type {
+  ExportImageOptions,
   MapProvider,
   MapProviderOptions,
   MapProviderState,
 } from "./MapProvider";
 import { getRouteBounds } from "./MapProvider";
+import { captureMaplibrePng } from "./maplibreExport";
+import { recencyLineGradient } from "./recencyGradient";
 import { buildRoutePolylines, buildTelemetrySegments } from "./routeSegments";
 
 const SOURCE_ID = "route";
@@ -47,13 +50,24 @@ function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
     }
   }
 
+  for (const p of state.points) {
+    features.push({
+      type: "Feature",
+      properties: { role: "node" },
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+    });
+  }
+
+  const newest = state.points[state.points.length - 1];
   const markers = [
     { role: "start", point: state.startPoint ?? state.points[0] },
     {
       role: "finish",
-      point: state.finishPoint ?? state.points[state.points.length - 1],
+      // In recency-fade mode the newest sample is the bright "head" instead.
+      point: state.fadeByRecency ? state.finishPoint : (state.finishPoint ?? newest),
     },
     { role: "selected", point: state.selectedPoint },
+    { role: "head", point: state.fadeByRecency ? newest : undefined },
   ];
 
   for (const marker of markers) {
@@ -88,6 +102,8 @@ export class OsmMapProvider implements MapProvider {
       container,
       center: DEFAULT_CENTER,
       zoom: 11,
+      // Required so the WebGL buffer survives compositing and can be exported.
+      canvasContextAttributes: { preserveDrawingBuffer: true },
       style: {
         version: 8,
         sources: {
@@ -142,6 +158,10 @@ export class OsmMapProvider implements MapProvider {
     const source = this.map?.getSource(SOURCE_ID) as GeoJSONSource | undefined;
     source?.setData(toGeoJson(state));
 
+    if (this.map?.getLayer("route-nodes")) {
+      this.map.setLayoutProperty("route-nodes", "visibility", state.showPoints ? "visible" : "none");
+    }
+
     const bounds = getRouteBounds(state);
     if (bounds && this.map) {
       this.map.fitBounds(bounds as LngLatBoundsLike, {
@@ -157,11 +177,20 @@ export class OsmMapProvider implements MapProvider {
     this.map = null;
   }
 
+  exportImage(options: ExportImageOptions): Promise<Blob> {
+    if (!this.map) return Promise.reject(new Error("Map not ready"));
+    return captureMaplibrePng(this.map, options, getRouteBounds(this.state));
+  }
+
   private addLayers(): void {
     if (!this.map) return;
 
+    const fade = this.state.fadeByRecency === true;
+
     this.map.addSource(SOURCE_ID, {
       type: "geojson",
+      // lineMetrics enables the line-progress used by the recency gradient.
+      lineMetrics: true,
       data: toGeoJson(this.state),
     });
     this.map.addLayer({
@@ -173,11 +202,9 @@ export class OsmMapProvider implements MapProvider {
         "line-cap": "round",
         "line-join": "round",
       },
-      paint: {
-        "line-color": "#142033",
-        "line-width": 9,
-        "line-opacity": 0.88,
-      },
+      paint: fade
+        ? { "line-gradient": recencyLineGradient("20,32,51", 0.88), "line-width": 9 }
+        : { "line-color": "#142033", "line-width": 9, "line-opacity": 0.88 },
     });
     this.map.addLayer({
       id: "route-glow",
@@ -188,12 +215,9 @@ export class OsmMapProvider implements MapProvider {
         "line-cap": "round",
         "line-join": "round",
       },
-      paint: {
-        "line-color": "#4cc43f",
-        "line-width": 7,
-        "line-opacity": 0.25,
-        "line-blur": 4,
-      },
+      paint: fade
+        ? { "line-gradient": recencyLineGradient("76,196,63", 0.25), "line-width": 7, "line-blur": 4 }
+        : { "line-color": "#4cc43f", "line-width": 7, "line-opacity": 0.25, "line-blur": 4 },
     });
     this.map.addLayer({
       id: "route-line",
@@ -205,9 +229,11 @@ export class OsmMapProvider implements MapProvider {
         "line-join": "round",
       },
       paint: {
-        "line-color": "#45b936",
         // Thinner when zoomed out, thicker when zoomed in.
         "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4, 18, 6.5],
+        ...(fade
+          ? { "line-gradient": recencyLineGradient("69,185,54") }
+          : { "line-color": "#45b936" }),
       },
     });
     this.map.addLayer({
@@ -223,6 +249,25 @@ export class OsmMapProvider implements MapProvider {
         "line-color": ["get", "color"],
         "line-width": 5,
         "line-opacity": ["get", "opacity"],
+      },
+    });
+
+    this.map.addLayer({
+      id: "route-nodes",
+      type: "circle",
+      source: SOURCE_ID,
+      // Per-GPS-point dots are toggled via showPoints (hidden by default) and,
+      // even when on, only appear when zoomed in (>= 16) so they never scatter
+      // across the trace on zoom-out.
+      minzoom: 16,
+      layout: { visibility: this.state.showPoints ? "visible" : "none" },
+      filter: ["==", ["get", "role"], "node"],
+      paint: {
+        "circle-radius": 3,
+        "circle-color": "#45b936",
+        "circle-opacity": 0.85,
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#ffffff",
       },
     });
 
@@ -256,5 +301,31 @@ export class OsmMapProvider implements MapProvider {
         },
       });
     }
+
+    // Bright "head" on the newest sample of the current selection.
+    this.map.addLayer({
+      id: "route-head-glow",
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "head"],
+      paint: {
+        "circle-radius": 15,
+        "circle-color": "#45b936",
+        "circle-opacity": 0.2,
+        "circle-blur": 0.6,
+      },
+    });
+    this.map.addLayer({
+      id: "route-head",
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "head"],
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#ffffff",
+        "circle-stroke-width": 3,
+        "circle-stroke-color": "#45b936",
+      },
+    });
   }
 }

@@ -20,6 +20,12 @@ export interface MapProviderState {
   startPoint?: MapPoint;
   finishPoint?: MapPoint;
   colorByTelemetry?: boolean;
+  // When true the trace fades by recency: the newest sample is rendered bright
+  // and the line dims toward the oldest sample of the current selection, with a
+  // bright "head" marker on the newest point.
+  fadeByRecency?: boolean;
+  // When true per-GPS-point dots are shown at every zoom; otherwise hidden.
+  showPoints?: boolean;
 }
 
 export interface MapProviderOptions extends MapProviderState {
@@ -27,11 +33,21 @@ export interface MapProviderOptions extends MapProviderState {
   signal: AbortSignal;
 }
 
+export interface ExportImageOptions {
+  /** When false, the basemap is hidden and only the route trace is captured. */
+  background: boolean;
+}
+
 export interface MapProvider {
   readonly type: ResolvedMapProviderType;
   mount(container: HTMLElement, options: MapProviderOptions): Promise<void>;
   update(state: MapProviderState): void;
   destroy(): void;
+  /**
+   * Optional capability: render the current map window to a PNG blob.
+   * Only MapLibre-based providers implement this; callers must feature-detect.
+   */
+  exportImage?(options: ExportImageOptions): Promise<Blob>;
 }
 
 export function getRouteBounds(
