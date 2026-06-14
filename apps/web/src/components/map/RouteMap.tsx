@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { CircleDot, Crosshair, Download, Flag, ImageOff, Maximize2, Minimize2, Radio, Route } from 'lucide-react'
 import { toast } from 'sonner'
-import { YANDEX_MAPS_API_KEY } from '@/config/env'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { SPEED_RAMP_CSS } from './providers/routeSegments'
 import { OsmMapProvider } from './providers/OsmMapProvider'
 import { OpenFreeMapProvider } from './providers/OpenFreeMapProvider'
-import { YandexMapProvider } from './providers/YandexMapProvider'
-import { YandexMapV2Provider } from './providers/YandexMapV2Provider'
 import type {
   MapPoint,
   MapProvider,
@@ -17,10 +14,11 @@ import type {
 } from './providers/MapProvider'
 
 export type { MapPoint, MapProvider, MapProviderType }
-export { OsmMapProvider, OpenFreeMapProvider, YandexMapProvider, YandexMapV2Provider }
+export { OsmMapProvider, OpenFreeMapProvider }
 
 export interface RouteMapProps {
   points: MapPoint[]
+  highlightedPath?: MapPoint[]
   selectedPoint?: MapPoint | null
   startPoint?: MapPoint
   finishPoint?: MapPoint
@@ -32,36 +30,30 @@ export interface RouteMapProps {
 }
 
 function createProvider(type: ResolvedMapProviderType): MapProvider {
-  if (type === 'yandex') return new YandexMapProvider(YANDEX_MAPS_API_KEY)
-  if (type === 'yandex-v2') return new YandexMapV2Provider(YANDEX_MAPS_API_KEY)
   if (type === 'maplibre-vector') return new OpenFreeMapProvider()
   return new OsmMapProvider()
 }
 
 function getInitialProvider(provider: MapProviderType): ResolvedMapProviderType {
   if (provider === 'osm') return 'osm'
-  if (provider === 'yandex') return 'yandex'
-  if (provider === 'yandex-v2') return 'yandex-v2'
   return 'maplibre-vector'
 }
 
 const PROVIDER_OPTIONS: { value: ResolvedMapProviderType; label: string }[] = [
   { value: 'maplibre-vector', label: 'Vector' },
   { value: 'osm', label: 'OSM' },
-  { value: 'yandex', label: 'Yandex' },
 ]
 
 function getFallbackProvider(
   active: ResolvedMapProviderType,
 ): ResolvedMapProviderType | null {
   if (active === 'maplibre-vector') return 'osm'
-  if (active === 'yandex') return 'yandex-v2'
-  if (active === 'yandex-v2') return 'osm'
   return null
 }
 
 export function RouteMap({
   points,
+  highlightedPath,
   selectedPoint,
   startPoint,
   finishPoint,
@@ -74,7 +66,7 @@ export function RouteMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const providerRef = useRef<MapProvider | null>(null)
   const fallbackRef = useRef(onProviderFallback)
-  const stateRef = useRef<MapProviderState>({ points, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints: false })
+  const stateRef = useRef<MapProviderState>({ points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints: false })
   const manualSelectionRef = useRef(false)
   const [activeProvider, setActiveProvider] = useState<ResolvedMapProviderType>(() => getInitialProvider(provider))
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -83,7 +75,7 @@ export function RouteMap({
   const [fullscreen, setFullscreen] = useState(false)
 
   fallbackRef.current = onProviderFallback
-  stateRef.current = { points, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints }
+  stateRef.current = { points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints }
 
   useEffect(() => {
     manualSelectionRef.current = false
@@ -145,7 +137,7 @@ export function RouteMap({
     }
   }, [activeProvider, provider])
 
-  useEffect(() => providerRef.current?.update(stateRef.current), [points, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints])
+  useEffect(() => providerRef.current?.update(stateRef.current), [points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints])
 
   // Exit fullscreen on Escape.
   useEffect(() => {

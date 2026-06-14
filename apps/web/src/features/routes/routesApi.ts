@@ -2,8 +2,8 @@ import { apiClient } from '@/api/client'
 import { getRoutes } from '@/api/generated/routes/routes'
 import { formatDistance, formatDuration } from '@/features/trips/tripsApi'
 import type {
-  InternalTransportHttpRouteResultResponse as RouteResultResponse,
-  InternalTransportHttpTripAttemptItem as TripAttemptItem,
+  HttpRouteResultResponse as RouteResultResponse,
+  HttpTripAttemptItem as TripAttemptItem,
 } from '@/api/generated/model'
 
 export { formatDistance, formatDuration }

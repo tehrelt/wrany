@@ -104,6 +104,15 @@ function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
     }
   }
 
+  const highlightedLines = buildRoutePolylines(state.highlightedPath ?? []);
+  if (highlightedLines.length > 0) {
+    features.push({
+      type: "Feature",
+      properties: { role: "fast-highlight" },
+      geometry: { type: "MultiLineString", coordinates: highlightedLines },
+    });
+  }
+
   // One feature per activity run, used for hover (type) + start-to-end highlight.
   for (const run of buildActivityRuns(state.points)) {
     features.push({
@@ -157,6 +166,7 @@ export class OpenFreeMapProvider implements MapProvider {
   private hoverPopup: Popup | null = null;
   private detailPopup: Popup | null = null;
   private activityPopup: Popup | null = null;
+  private fittedPoints: MapProviderState["points"] | null = null;
 
   async mount(container: HTMLElement, options: MapProviderOptions): Promise<void> {
     this.state = options;
@@ -213,13 +223,26 @@ export class OpenFreeMapProvider implements MapProvider {
     this.state = state;
     const source = this.map?.getSource(SOURCE_ID) as GeoJSONSource | undefined;
     source?.setData(toGeoJson(state));
+    const dimmed = (state.highlightedPath?.length ?? 0) > 1;
+    if (this.map?.getLayer("route-line")) {
+      this.map.setPaintProperty("route-casing", "line-opacity", dimmed ? 0.25 : 0.95);
+      this.map.setPaintProperty("route-glow-outer", "line-opacity", dimmed ? 0.04 : 0.1);
+      this.map.setPaintProperty("route-glow", "line-opacity", dimmed ? 0.08 : 0.28);
+      this.map.setPaintProperty("route-line", "line-opacity", dimmed ? 0.22 : 1);
+      this.map.setPaintProperty(
+        "route-segments",
+        "line-opacity",
+        dimmed ? ["*", ["get", "opacity"], 0.18] : ["get", "opacity"],
+      );
+    }
 
     if (this.map?.getLayer("route-nodes")) {
       this.map.setLayoutProperty("route-nodes", "visibility", state.showPoints ? "visible" : "none");
     }
 
     const bounds = getRouteBounds(state);
-    if (bounds && this.map) {
+    if (bounds && this.map && this.fittedPoints !== state.points) {
+      this.fittedPoints = state.points;
       this.map.fitBounds(bounds as LngLatBoundsLike, {
         padding: 56,
         duration: 400,
@@ -237,6 +260,7 @@ export class OpenFreeMapProvider implements MapProvider {
     this.activityPopup = null;
     this.map?.remove();
     this.map = null;
+    this.fittedPoints = null;
   }
 
   // Light up a single activity run (runId), or none with -1.
@@ -382,6 +406,31 @@ export class OpenFreeMapProvider implements MapProvider {
         "line-color": ["get", "color"],
         "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 4.5, 18, 7],
         "line-opacity": ["get", "opacity"],
+      },
+    });
+    this.map.addLayer({
+      id: "route-fast-highlight-glow",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "fast-highlight"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#f59e0b",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 12, 14, 16, 18, 22],
+        "line-opacity": 0.32,
+        "line-blur": 6,
+      },
+    });
+    this.map.addLayer({
+      id: "route-fast-highlight",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "fast-highlight"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#fef3c7",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 14, 7, 18, 11],
+        "line-opacity": 0.98,
       },
     });
 

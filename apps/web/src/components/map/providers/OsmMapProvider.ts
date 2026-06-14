@@ -50,6 +50,15 @@ function toGeoJson(state: MapProviderState): GeoJSON.FeatureCollection {
     }
   }
 
+  const highlightedLines = buildRoutePolylines(state.highlightedPath ?? []);
+  if (highlightedLines.length > 0) {
+    features.push({
+      type: "Feature",
+      properties: { role: "fast-highlight" },
+      geometry: { type: "MultiLineString", coordinates: highlightedLines },
+    });
+  }
+
   for (const p of state.points) {
     features.push({
       type: "Feature",
@@ -89,6 +98,7 @@ export class OsmMapProvider implements MapProvider {
   readonly type = "osm" as const;
   private map: MapLibreMap | null = null;
   private state: MapProviderState = { points: [] };
+  private fittedPoints: MapProviderState["points"] | null = null;
 
   async mount(
     container: HTMLElement,
@@ -157,13 +167,25 @@ export class OsmMapProvider implements MapProvider {
     this.state = state;
     const source = this.map?.getSource(SOURCE_ID) as GeoJSONSource | undefined;
     source?.setData(toGeoJson(state));
+    const dimmed = (state.highlightedPath?.length ?? 0) > 1;
+    if (this.map?.getLayer("route-line")) {
+      this.map.setPaintProperty("route-casing", "line-opacity", dimmed ? 0.22 : 0.88);
+      this.map.setPaintProperty("route-glow", "line-opacity", dimmed ? 0.06 : 0.25);
+      this.map.setPaintProperty("route-line", "line-opacity", dimmed ? 0.2 : 1);
+      this.map.setPaintProperty(
+        "route-segments",
+        "line-opacity",
+        dimmed ? ["*", ["get", "opacity"], 0.18] : ["get", "opacity"],
+      );
+    }
 
     if (this.map?.getLayer("route-nodes")) {
       this.map.setLayoutProperty("route-nodes", "visibility", state.showPoints ? "visible" : "none");
     }
 
     const bounds = getRouteBounds(state);
-    if (bounds && this.map) {
+    if (bounds && this.map && this.fittedPoints !== state.points) {
+      this.fittedPoints = state.points;
       this.map.fitBounds(bounds as LngLatBoundsLike, {
         padding: 56,
         duration: 400,
@@ -175,6 +197,7 @@ export class OsmMapProvider implements MapProvider {
   destroy(): void {
     this.map?.remove();
     this.map = null;
+    this.fittedPoints = null;
   }
 
   exportImage(options: ExportImageOptions): Promise<Blob> {
@@ -249,6 +272,31 @@ export class OsmMapProvider implements MapProvider {
         "line-color": ["get", "color"],
         "line-width": 5,
         "line-opacity": ["get", "opacity"],
+      },
+    });
+    this.map.addLayer({
+      id: "route-fast-highlight-glow",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "fast-highlight"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#d97706",
+        "line-width": 15,
+        "line-opacity": 0.28,
+        "line-blur": 5,
+      },
+    });
+    this.map.addLayer({
+      id: "route-fast-highlight",
+      type: "line",
+      source: SOURCE_ID,
+      filter: ["==", ["get", "role"], "fast-highlight"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#fff7d6",
+        "line-width": 8,
+        "line-opacity": 0.98,
       },
     });
 

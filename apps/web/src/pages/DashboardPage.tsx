@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Activity, Crosshair, Gauge, Radio, Satellite, Timer } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -10,13 +10,18 @@ import {
   TrackingFilters,
 } from '@/features/tracking/TrackingFilters'
 import { useTrackSettings } from '@/features/tracking/useTrackSettings'
+import { FastSegmentsPanel, fastSegmentId } from '@/features/tracking/FastSegmentsPanel'
 import { ErrorState, MetricCard, SectionHeader } from '@/components/analytics/AnalyticsUi'
 import {
   deletePoint,
+  getFastSegments,
   getPoints,
   getSummary,
   getTrack,
   type PointsResponse,
+  type FastSegment,
+  type FastSegmentLimit,
+  type FastSegmentPreset,
   type TrackingSummary,
   type TrackSegment,
 } from '@/features/tracking/trackingApi'
@@ -53,6 +58,9 @@ export function DashboardPage({ onLogout }: Props) {
   const [to, setTo] = useSearchParamState('to', initialTo)
   const [revision, setRevision] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [fastPreset, setFastPreset] = useState<FastSegmentPreset>('normal')
+  const [fastLimit, setFastLimit] = useState<FastSegmentLimit>(5)
+  const [activeFastSegmentId, setActiveFastSegmentId] = useState<string | null>(null)
   const [trackSettings, setTrackSettings] = useTrackSettings()
 
   const filter = { device_id: deviceId || undefined, from, to }
@@ -77,6 +85,16 @@ export function DashboardPage({ onLogout }: Props) {
     queryFn: () => getSummary(filter),
     enabled: Boolean(from && to),
   })
+  const fastSegmentsQuery = useQuery<FastSegment[]>({
+    queryKey: ['fast-segments', filter, fastPreset, fastLimit, revision],
+    queryFn: () => getFastSegments({
+      ...filter,
+      preset: fastPreset,
+      limit: fastLimit,
+    }),
+    enabled: Boolean(from && to),
+    placeholderData: keepPreviousData,
+  })
 
   const refresh = useCallback(() => setRevision(value => value + 1), [])
   const handleDelete = useCallback(async (id: string) => {
@@ -87,8 +105,12 @@ export function DashboardPage({ onLogout }: Props) {
   const segments = trackQuery.data ?? []
   const points = pointsQuery.data?.items ?? []
   const summary = summaryQuery.data
+  const fastSegments = fastSegmentsQuery.data ?? []
+  const activeFastSegment = activeFastSegmentId
+    ? fastSegments.find(segment => fastSegmentId(segment) === activeFastSegmentId)
+    : undefined
   const selectedSegment = selectedId ? segments.find(segment => segment.event_id === selectedId) : undefined
-  const mapPoints = segments.map(segment => ({
+  const mapPoints = useMemo(() => segments.map(segment => ({
     lat: segment.lat,
     lon: segment.lon,
     segmentId: segment.segment_id,
@@ -97,8 +119,13 @@ export function DashboardPage({ onLogout }: Props) {
     accuracyM: segment.accuracy_m,
     kind: segment.kind,
     eventId: segment.event_id,
-  }))
-  const loading = trackQuery.isLoading || summaryQuery.isLoading
+  })), [segments])
+  const highlightedPath = useMemo(() => activeFastSegment?.points.map(point => ({
+    lat: point.lat,
+    lon: point.lon,
+    recordedAt: point.recorded_at,
+  })), [activeFastSegment])
+  const loading = trackQuery.isLoading || summaryQuery.isLoading || fastSegmentsQuery.isLoading
   const filters = (
     <TrackingFilters
       deviceId={deviceId}
@@ -117,7 +144,7 @@ export function DashboardPage({ onLogout }: Props) {
   return (
     <AppLayout userEmail={getUserEmail(token)} onLogout={onLogout} sidebar={filters}>
       <div className="h-full overflow-y-auto">
-        {(trackQuery.isError || pointsQuery.isError || summaryQuery.isError) ? (
+        {(trackQuery.isError || pointsQuery.isError || summaryQuery.isError || fastSegmentsQuery.isError) ? (
           <ErrorState title="Telemetry link lost" description="Check device and selected time window." onRetry={refresh} />
         ) : null}
 
@@ -142,6 +169,7 @@ export function DashboardPage({ onLogout }: Props) {
                 <RouteMap
                   points={mapPoints}
                   colorByTelemetry
+                  highlightedPath={highlightedPath}
                   fadeByRecency
                   selectedPoint={selectedSegment ? {
                     lat: selectedSegment.lat,
@@ -158,7 +186,19 @@ export function DashboardPage({ onLogout }: Props) {
               <SectionHeader title="Strategy controls" description="Telemetry processing window" />
               <div className="mt-5">{filters}</div>
             </div>
-            <div className="race-panel mt-4 overflow-hidden lg:mt-0">
+            <div className="mt-4 lg:mt-0">
+              <FastSegmentsPanel
+                items={fastSegments}
+                loading={fastSegmentsQuery.isLoading}
+                preset={fastPreset}
+                limit={fastLimit}
+                activeId={activeFastSegmentId}
+                onPresetChange={setFastPreset}
+                onLimitChange={setFastLimit}
+                onActiveChange={setActiveFastSegmentId}
+              />
+            </div>
+            <div className="race-panel mt-4 overflow-hidden">
               <div className="border-b px-4 py-3">
                 <SectionHeader title="Signal feed" description="Latest raw positioning packets" />
               </div>

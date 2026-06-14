@@ -1,4 +1,4 @@
-export type MapProviderType = "yandex" | "yandex-v2" | "osm" | "maplibre-vector" | "auto";
+export type MapProviderType = "osm" | "maplibre-vector" | "auto";
 export type ResolvedMapProviderType = Exclude<MapProviderType, "auto">;
 
 export interface MapPoint {
@@ -16,6 +16,7 @@ export interface MapPoint {
 
 export interface MapProviderState {
   points: MapPoint[];
+  highlightedPath?: MapPoint[];
   selectedPoint?: MapPoint | null;
   startPoint?: MapPoint;
   finishPoint?: MapPoint;
