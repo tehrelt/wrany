@@ -1,7 +1,9 @@
 {
   "title": "Logs Overview",
   "uid": "wrany-logs-overview",
-  "tags": ["wrany"],
+  "tags": [
+    "wrany"
+  ],
   "timezone": "browser",
   "schemaVersion": 37,
   "refresh": "30s",
@@ -10,79 +12,204 @@
       "id": 1,
       "title": "All Logs",
       "type": "logs",
-      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 10
+      },
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "loki"},
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "{job=~\".+\"}",
           "legendFormat": ""
         }
       ],
-      "options": {"showTime": true, "sortOrder": "Descending", "wrapLogMessage": true}
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 2,
       "title": "Error Logs",
       "type": "logs",
-      "gridPos": {"x": 0, "y": 10, "w": 24, "h": 10},
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 10
+      },
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "loki"},
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "{job=~\".+\"} | json | level=\"ERROR\"",
           "legendFormat": ""
         }
       ],
-      "options": {"showTime": true, "sortOrder": "Descending", "wrapLogMessage": true}
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 3,
       "title": "Search by request_id",
       "type": "logs",
-      "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "loki"},
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "{job=~\".+\"} | json | request_id=\"$request_id\"",
           "legendFormat": ""
         }
       ],
-      "options": {"showTime": true, "sortOrder": "Descending", "wrapLogMessage": true}
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 4,
       "title": "Search by session_id",
       "type": "logs",
-      "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "loki"},
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "{job=~\".+\"} | json | session_id=\"$session_id\"",
           "legendFormat": ""
         }
       ],
-      "options": {"showTime": true, "sortOrder": "Descending", "wrapLogMessage": true}
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     },
     {
       "id": 5,
       "title": "Search by event_id",
       "type": "logs",
-      "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "loki"},
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "{job=~\".+\"} | json | event_id=\"$event_id\"",
           "legendFormat": ""
         }
       ],
-      "options": {"showTime": true, "sortOrder": "Descending", "wrapLogMessage": true}
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Search by trace_id",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service=~\".+\"} |= \"${trace_id:raw}\"",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "sortOrder": "Descending"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 6
     }
   ],
   "templating": {
     "list": [
-      {"name": "DS_LOKI", "type": "datasource", "query": "loki", "hide": 0},
-      {"name": "request_id", "type": "textbox", "label": "request_id", "current": {"value": ""}},
-      {"name": "session_id", "type": "textbox", "label": "session_id", "current": {"value": ""}},
-      {"name": "event_id", "type": "textbox", "label": "event_id", "current": {"value": ""}}
+      {
+        "name": "DS_LOKI",
+        "type": "datasource",
+        "query": "loki",
+        "hide": 0
+      },
+      {
+        "name": "request_id",
+        "type": "textbox",
+        "label": "request_id",
+        "current": {
+          "value": ""
+        }
+      },
+      {
+        "name": "session_id",
+        "type": "textbox",
+        "label": "session_id",
+        "current": {
+          "value": ""
+        }
+      },
+      {
+        "name": "event_id",
+        "type": "textbox",
+        "label": "event_id",
+        "current": {
+          "value": ""
+        }
+      },
+      {
+        "name": "trace_id",
+        "label": "Trace ID",
+        "type": "textbox",
+        "current": {
+          "value": ""
+        },
+        "hide": 0
+      }
     ]
   }
 }

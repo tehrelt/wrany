@@ -3,6 +3,8 @@ package logger
 import (
 	"context"
 	"log/slog"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ctxKey int
@@ -40,7 +42,17 @@ func DeviceIDFromContext(ctx context.Context) string {
 	return v
 }
 
-// FromContext returns a logger enriched with request_id, user_id, and device_id from ctx.
+// WithTraceID enriches base with trace_id and span_id from the active OTel span in ctx.
+// When tracing is disabled (noop provider) the span context is invalid and nothing is added.
+func WithTraceID(ctx context.Context, base *slog.Logger) *slog.Logger {
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		return base.With("trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
+	}
+	return base
+}
+
+// FromContext returns a logger enriched with request_id, user_id, device_id, and trace_id from ctx.
 func FromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
 	l := base
 	if id := RequestIDFromContext(ctx); id != "" {
@@ -52,5 +64,5 @@ func FromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
 	if id := DeviceIDFromContext(ctx); id != "" {
 		l = l.With("device_id", id)
 	}
-	return l
+	return WithTraceID(ctx, l)
 }

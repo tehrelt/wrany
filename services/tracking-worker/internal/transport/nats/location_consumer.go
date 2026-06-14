@@ -5,9 +5,10 @@ package nats
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/wrany/libs/eventbus"
+	"github.com/wrany/libs/observability/tracing"
 	"github.com/wrany/tracking-worker/internal/usecase"
 )
 
@@ -41,23 +42,26 @@ func (lc *LocationConsumer) Close() error {
 
 // handle is the MessageHandler passed to the consumer.
 // It is the sole caller of msg.Ack() and msg.Nak() in tracking-worker.
-func (lc *LocationConsumer) handle(ctx context.Context, msg eventbus.Message) error {
+func (lc *LocationConsumer) handle(_ context.Context, msg eventbus.Message) error {
+	// Continue the distributed trace from the publisher span.
+	ctx := tracing.ExtractFromHeaders(msg.Headers())
+
 	input := usecase.ProcessingInput{Data: msg.Data()}
 	result := lc.processor.Process(ctx, input)
 
 	switch result.Action {
 	case usecase.ActionAck:
 		if err := msg.Ack(); err != nil {
-			log.Printf("location_consumer: ack failed on %q: %v", msg.Subject(), err)
+			slog.Error("location_consumer: ack failed", "subject", msg.Subject(), "err", err)
 			return err
 		}
 	case usecase.ActionNak:
 		if err := msg.Nak(); err != nil {
-			log.Printf("location_consumer: nak failed on %q: %v", msg.Subject(), err)
+			slog.Error("location_consumer: nak failed", "subject", msg.Subject(), "err", err)
 			return err
 		}
 	default:
-		log.Printf("location_consumer: unknown action %d on %q, naking", result.Action, msg.Subject())
+		slog.Warn("location_consumer: unknown action, naking", "action", result.Action, "subject", msg.Subject())
 		if err := msg.Nak(); err != nil {
 			return err
 		}

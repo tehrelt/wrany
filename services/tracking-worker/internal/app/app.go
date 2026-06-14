@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	eventbusnats "github.com/wrany/libs/eventbus/nats"
 	obslogger "github.com/wrany/libs/observability/logger"
 	"github.com/wrany/tracking-worker/internal/config"
@@ -134,7 +136,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	return &App{
 		httpSrv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: httptransport.NewRouter(metrics, db, bus),
+			Handler: otelhttp.NewHandler(httptransport.NewRouter(metrics, db, bus), "tracking-worker"),
 		},
 		locationConsumer: locationConsumer,
 		tripDetectionJob: tripJob,

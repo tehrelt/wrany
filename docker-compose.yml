@@ -52,6 +52,8 @@ services:
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       NATS_STREAM: ${NATS_STREAM:-WRANY_EVENTS}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-tempo:4317}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     networks:
@@ -83,6 +85,8 @@ services:
       NATS_CONSUMER_MAX_DELIVER: ${NATS_CONSUMER_MAX_DELIVER:-5}
       NATS_CONSUMER_BATCH_SIZE: ${NATS_CONSUMER_BATCH_SIZE:-100}
       NATS_CONSUMER_POLL_TIMEOUT_SEC: ${NATS_CONSUMER_POLL_TIMEOUT_SEC:-5}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-tempo:4317}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
     ports:
       - "${WORKER_PORT:-8081}:8081"
     networks:
@@ -209,12 +213,27 @@ services:
     profiles:
       - observability
 
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./infra/observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    networks:
+      - wrany-net
+    profiles:
+      - observability
+
 volumes:
   postgres_data:
   nats_data:
   prometheus_data:
   grafana_data:
   loki_data:
+  tempo_data:
 
 networks:
   wrany-net:

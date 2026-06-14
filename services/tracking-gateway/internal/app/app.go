@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"github.com/wrany/libs/eventbus"
 	natseventbus "github.com/wrany/libs/eventbus/nats"
 	obslogger "github.com/wrany/libs/observability/logger"
@@ -96,7 +98,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 	return &App{
 		srv: &http.Server{
 			Addr:    ":" + cfg.Port,
-			Handler: handler,
+			Handler: otelhttp.NewHandler(handler, "tracking-gateway"),
 		},
 		natsBus: natsBus,
 	}
