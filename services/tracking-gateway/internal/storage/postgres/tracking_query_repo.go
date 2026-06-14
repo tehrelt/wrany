@@ -281,6 +281,67 @@ func (r *TrackingQueryRepo) GetTrack(
 	return segments, nil
 }
 
+// GetFastSegmentPoints returns accepted moving points with stable segment IDs.
+func (r *TrackingQueryRepo) GetFastSegmentPoints(
+	ctx context.Context,
+	f domain.FastSegmentFilter,
+) ([]domain.FastSegmentSourcePoint, error) {
+	args := []any{f.UserID, f.From, f.To}
+	deviceClause := ""
+	if f.DeviceID != "" {
+		deviceClause = "AND device_id = $4"
+		args = append(args, f.DeviceID)
+	}
+
+	query := `
+		WITH accepted AS (
+			SELECT device_id, event_id, recorded_at,
+				filtered_lat AS lat, filtered_lon AS lon, noise_reason
+			FROM processed_location_points
+			WHERE user_id = $1
+				AND recorded_at >= $2 AND recorded_at <= $3
+				AND is_accepted
+				AND NOT is_stationary
+				AND filtered_lat IS NOT NULL AND filtered_lon IS NOT NULL ` + deviceClause + `
+		),
+		segmented AS (
+			SELECT *,
+				SUM((noise_reason = 'segment_break')::int) OVER (
+					PARTITION BY device_id
+					ORDER BY recorded_at, event_id
+					ROWS UNBOUNDED PRECEDING
+				) AS device_segment
+			FROM accepted
+		)
+		SELECT device_id::text, event_id, recorded_at, lat, lon,
+			DENSE_RANK() OVER (ORDER BY device_id, device_segment)::int AS segment_id
+		FROM segmented
+		ORDER BY device_id, recorded_at, event_id
+	`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]domain.FastSegmentSourcePoint, 0)
+	for rows.Next() {
+		var point domain.FastSegmentSourcePoint
+		if err := rows.Scan(
+			&point.DeviceID, &point.EventID, &point.RecordedAt,
+			&point.Lat, &point.Lon, &point.SegmentID,
+		); err != nil {
+			return nil, err
+		}
+		points = append(points, point)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return points, nil
+}
+
 // GetSummary returns aggregated stats for the given filter.
 func (r *TrackingQueryRepo) GetSummary(
 	ctx context.Context,

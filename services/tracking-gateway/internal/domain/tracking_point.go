@@ -69,3 +69,48 @@ type TrackSegment struct {
 	StayDurationSec int // seconds; 0 for move segments
 	MergedCount     int // raw points merged; 1 for move segments
 }
+
+type FastSegmentPreset string
+
+const (
+	FastSegmentPresetSoft   FastSegmentPreset = "soft"
+	FastSegmentPresetNormal FastSegmentPreset = "normal"
+	FastSegmentPresetStrict FastSegmentPreset = "strict"
+)
+
+// FastSegmentSourcePoint is an accepted processed point used for ranking.
+type FastSegmentSourcePoint struct {
+	DeviceID   string
+	EventID    string
+	RecordedAt time.Time
+	Lat        float64
+	Lon        float64
+	SegmentID  int
+}
+
+// FastSegmentFilter selects processed points for fastest-section analysis.
+type FastSegmentFilter struct {
+	UserID   string
+	DeviceID string
+	From     time.Time
+	To       time.Time
+}
+
+type FastSegmentPoint struct {
+	Lat        float64
+	Lon        float64
+	RecordedAt time.Time
+}
+
+type FastSegment struct {
+	Rank             int
+	DeviceID         string
+	StartedAt        time.Time
+	EndedAt          time.Time
+	DurationSec      int64
+	DistanceM        float64
+	AvgSpeedMps      float64
+	BaselineSpeedMps float64
+	UpliftPercent    float64
+	Points           []FastSegmentPoint
+}

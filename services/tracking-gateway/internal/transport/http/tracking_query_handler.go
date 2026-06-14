@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/wrany/tracking-gateway/internal/domain"
 	"github.com/wrany/tracking-gateway/internal/usecase"
 )
 
@@ -283,6 +284,77 @@ func (h *TrackingQueryHandler) GetTrack(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, TrackResponse{Items: items})
 }
 
+// GetFastSegments godoc
+// @Summary      Rank fastest non-overlapping sections in a time range
+// @Tags         tracking
+// @Produce      json
+// @Param        device_id  query     string  false  "Filter by device UUID"
+// @Param        from       query     string  true   "Start of time range (RFC3339)"
+// @Param        to         query     string  true   "End of time range (RFC3339)"
+// @Param        preset     query     string  true   "Sensitivity: soft, normal, strict"
+// @Param        limit      query     int     true   "Result count: 5, 10, 20"
+// @Success      200        {object}  FastSegmentsEnv
+// @Failure      400        {object}  ApiError
+// @Failure      401        {object}  ApiError
+// @Security     BearerAuth
+// @Router       /v1/tracking/fast-segments [get]
+func (h *TrackingQueryHandler) GetFastSegments(w http.ResponseWriter, r *http.Request) {
+	userID, ok := UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	q := r.URL.Query()
+	from, to, err := parseDateRange(q.Get("from"), q.Get("to"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	limit, err := strconv.Atoi(q.Get("limit"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, usecase.ErrInvalidFastSegmentLimit.Error())
+		return
+	}
+
+	segments, err := h.uc.GetFastSegments(r.Context(), usecase.GetFastSegmentsInput{
+		UserID: userID.String(), DeviceID: q.Get("device_id"),
+		From: from, To: to,
+		Preset: domain.FastSegmentPreset(q.Get("preset")),
+		Limit:  limit,
+	})
+	if err != nil {
+		if isValidationError(err) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]FastSegmentItem, 0, len(segments))
+	for _, segment := range segments {
+		points := make([]FastSegmentPoint, 0, len(segment.Points))
+		for _, point := range segment.Points {
+			points = append(points, FastSegmentPoint{
+				Lat: point.Lat, Lon: point.Lon,
+				RecordedAt: point.RecordedAt.UTC().Format(time.RFC3339),
+			})
+		}
+		items = append(items, FastSegmentItem{
+			Rank: segment.Rank, DeviceID: segment.DeviceID,
+			StartedAt:   segment.StartedAt.UTC().Format(time.RFC3339),
+			EndedAt:     segment.EndedAt.UTC().Format(time.RFC3339),
+			DurationSec: segment.DurationSec, DistanceM: segment.DistanceM,
+			AvgSpeedMps:      segment.AvgSpeedMps,
+			BaselineSpeedMps: segment.BaselineSpeedMps,
+			UpliftPercent:    segment.UpliftPercent,
+			Points:           points,
+		})
+	}
+	writeJSON(w, http.StatusOK, FastSegmentsResponse{Items: items})
+}
+
 func parseDateRange(fromStr, toStr string) (time.Time, time.Time, error) {
 	if fromStr == "" {
 		return time.Time{}, time.Time{}, usecase.ErrFromRequired
@@ -305,5 +377,7 @@ func isValidationError(err error) bool {
 	return err == usecase.ErrFromRequired ||
 		err == usecase.ErrToRequired ||
 		err == usecase.ErrInvalidRange ||
-		err == usecase.ErrRangeTooLarge
+		err == usecase.ErrRangeTooLarge ||
+		err == usecase.ErrInvalidFastSegmentPreset ||
+		err == usecase.ErrInvalidFastSegmentLimit
 }

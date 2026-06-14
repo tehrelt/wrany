@@ -160,6 +160,34 @@ type TrackEnv struct {
 	Error *string       `json:"error"`
 }
 
+type FastSegmentPoint struct {
+	Lat        float64 `json:"lat" example:"55.751244"`
+	Lon        float64 `json:"lon" example:"37.618423"`
+	RecordedAt string  `json:"recorded_at" example:"2026-06-10T12:00:01Z"`
+}
+
+type FastSegmentItem struct {
+	Rank             int                `json:"rank" example:"1"`
+	DeviceID         string             `json:"device_id"`
+	StartedAt        string             `json:"started_at"`
+	EndedAt          string             `json:"ended_at"`
+	DurationSec      int64              `json:"duration_sec" example:"42"`
+	DistanceM        float64            `json:"distance_m" example:"310"`
+	AvgSpeedMps      float64            `json:"avg_speed_mps" example:"7.38"`
+	BaselineSpeedMps float64            `json:"baseline_speed_mps" example:"3.12"`
+	UpliftPercent    float64            `json:"uplift_percent" example:"136.5"`
+	Points           []FastSegmentPoint `json:"points"`
+}
+
+type FastSegmentsResponse struct {
+	Items []FastSegmentItem `json:"items"`
+}
+
+type FastSegmentsEnv struct {
+	Data  FastSegmentsResponse `json:"data"`
+	Error *string              `json:"error"`
+}
+
 // TripItem is a single trip in list/detail responses.
 type TripItem struct {
 	ID          string   `json:"id"`

@@ -3,6 +3,8 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -21,6 +23,8 @@ type stubTrackingQueryRepo struct {
 
 	capturedFilter      domain.TrackingPointFilter
 	capturedTrackFilter domain.TrackFilter
+	fastSegmentPoints   []domain.FastSegmentSourcePoint
+	capturedFastFilter  domain.FastSegmentFilter
 }
 
 func (s *stubTrackingQueryRepo) GetPoints(
@@ -46,6 +50,13 @@ func (s *stubTrackingQueryRepo) GetTrack(
 ) ([]domain.TrackSegment, error) {
 	s.capturedTrackFilter = f
 	return nil, s.err
+}
+
+func (s *stubTrackingQueryRepo) GetFastSegmentPoints(
+	_ context.Context, f domain.FastSegmentFilter,
+) ([]domain.FastSegmentSourcePoint, error) {
+	s.capturedFastFilter = f
+	return s.fastSegmentPoints, s.err
 }
 
 var (
@@ -172,4 +183,69 @@ func TestGetTrack_AllowsZeroDurations(t *testing.T) {
 	assert.Equal(t, 0.5, stub.capturedTrackFilter.SpeedThresholdMps)
 	assert.Zero(t, stub.capturedTrackFilter.MinStaySec)
 	assert.Zero(t, stub.capturedTrackFilter.MinMoveSec)
+}
+
+func TestGetFastSegments_RanksContinuousFastRun(t *testing.T) {
+	base := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	speeds := []float64{1, 1, 4, 4, 4, 1}
+	points := make([]domain.FastSegmentSourcePoint, 0, len(speeds)+1)
+	lon := 37.0
+	points = append(points, domain.FastSegmentSourcePoint{
+		DeviceID: "d1", EventID: "e0", RecordedAt: base,
+		Lat: 55, Lon: lon, SegmentID: 1,
+	})
+	for i, speed := range speeds {
+		lon += speed * 10 / (111320 * math.Cos(55*math.Pi/180))
+		points = append(points, domain.FastSegmentSourcePoint{
+			DeviceID: "d1", EventID: fmt.Sprintf("e%d", i+1),
+			RecordedAt: base.Add(time.Duration(i+1) * 10 * time.Second),
+			Lat:        55, Lon: lon, SegmentID: 1,
+		})
+	}
+	stub := &stubTrackingQueryRepo{fastSegmentPoints: points}
+	uc := usecase.NewTrackingQueryUsecase(stub)
+
+	segments, err := uc.GetFastSegments(context.Background(), usecase.GetFastSegmentsInput{
+		UserID: "u1", From: base.Add(-time.Minute), To: base.Add(time.Minute),
+		Preset: domain.FastSegmentPresetNormal, Limit: 5,
+	})
+	require.NoError(t, err)
+	require.Len(t, segments, 1)
+	assert.Equal(t, 1, segments[0].Rank)
+	assert.Equal(t, int64(30), segments[0].DurationSec)
+	assert.InDelta(t, 4, segments[0].AvgSpeedMps, 0.02)
+	assert.Len(t, segments[0].Points, 4)
+}
+
+func TestGetFastSegments_ValidatesOptions(t *testing.T) {
+	uc := usecase.NewTrackingQueryUsecase(&stubTrackingQueryRepo{})
+
+	_, err := uc.GetFastSegments(context.Background(), usecase.GetFastSegmentsInput{
+		UserID: "u1", From: from, To: to, Preset: "unknown", Limit: 5,
+	})
+	assert.ErrorIs(t, err, usecase.ErrInvalidFastSegmentPreset)
+
+	_, err = uc.GetFastSegments(context.Background(), usecase.GetFastSegmentsInput{
+		UserID: "u1", From: from, To: to,
+		Preset: domain.FastSegmentPresetSoft, Limit: 7,
+	})
+	assert.ErrorIs(t, err, usecase.ErrInvalidFastSegmentLimit)
+}
+
+func TestGetFastSegments_DoesNotCrossSegmentBreak(t *testing.T) {
+	base := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	points := []domain.FastSegmentSourcePoint{
+		{DeviceID: "d1", EventID: "e0", RecordedAt: base, Lat: 55, Lon: 37, SegmentID: 1},
+		{DeviceID: "d1", EventID: "e1", RecordedAt: base.Add(10 * time.Second), Lat: 55, Lon: 37.001, SegmentID: 1},
+		{DeviceID: "d1", EventID: "e2", RecordedAt: base.Add(20 * time.Second), Lat: 55, Lon: 37.002, SegmentID: 2},
+		{DeviceID: "d1", EventID: "e3", RecordedAt: base.Add(30 * time.Second), Lat: 55, Lon: 37.003, SegmentID: 2},
+	}
+	uc := usecase.NewTrackingQueryUsecase(&stubTrackingQueryRepo{fastSegmentPoints: points})
+
+	segments, err := uc.GetFastSegments(context.Background(), usecase.GetFastSegmentsInput{
+		UserID: "u1", From: base.Add(-time.Minute), To: base.Add(time.Minute),
+		Preset: domain.FastSegmentPresetSoft, Limit: 5,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, segments)
 }
