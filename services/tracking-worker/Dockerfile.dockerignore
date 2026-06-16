@@ -1,0 +1,15 @@
+**
+!libs/
+!libs/events/
+!libs/events/**
+!libs/eventbus/
+!libs/eventbus/**
+!libs/observability/
+!libs/observability/**
+!services/
+!services/tracking-worker/
+!services/tracking-worker/**
+**/*_test.go
+**/*.md
+**/.dockerignore
+**/Dockerfile.dockerignore
