@@ -204,7 +204,13 @@ export function TrackingStatusScreen(): React.JSX.Element {
       await requestActivityRecognition();
       await checkPermissions();
 
-      if (!(await getAccessToken())) {
+      // getValidToken refreshes a missing/expired access token using the
+      // stored refresh token; it only throws AuthExpiredError when refresh
+      // itself is dead. A raw getAccessToken() check here would falsely report
+      // "Not authenticated" whenever the access token expired but refresh works.
+      try {
+        await getValidToken();
+      } catch {
         setError('Not authenticated. Please log in again.');
         return;
       }
