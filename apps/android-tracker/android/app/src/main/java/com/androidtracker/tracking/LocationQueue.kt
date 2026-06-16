@@ -55,6 +55,27 @@ interface LocationQueueDao {
 
     @Query("DELETE FROM location_queue WHERE status = 'failed'")
     suspend fun clearFailed()
+
+    // Requeue previously failed points. Also normalises legacy activity_type
+    // values that older builds wrote with the wrong wire names — those were the
+    // very reason the points were rejected (invalid_activity_type).
+    @Query(
+        """
+        UPDATE location_queue
+        SET status = 'pending',
+            attempts = 0,
+            lastError = NULL,
+            activityType = CASE activityType
+                WHEN 'still' THEN 'stationary'
+                WHEN 'on_bicycle' THEN 'bicycle'
+                WHEN 'in_vehicle' THEN 'vehicle'
+                ELSE activityType
+            END,
+            updatedAt = :now
+        WHERE status = 'failed'
+        """
+    )
+    suspend fun retryFailed(now: String): Int
 }
 
 @Database(entities = [LocationPoint::class], version = 1, exportSchema = false)

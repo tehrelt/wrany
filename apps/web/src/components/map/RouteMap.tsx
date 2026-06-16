@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Crosshair, Flag, Radio, Route } from 'lucide-react'
-import { YANDEX_MAPS_API_KEY } from '@/config/env'
+import { CircleDot, Crosshair, Download, Flag, ImageOff, Maximize2, Minimize2, Radio, Route } from 'lucide-react'
+import { toast } from 'sonner'
+import { downloadBlob } from '@/lib/downloadBlob'
+import { SPEED_RAMP_CSS } from './providers/routeSegments'
 import { OsmMapProvider } from './providers/OsmMapProvider'
 import { OpenFreeMapProvider } from './providers/OpenFreeMapProvider'
-import { YandexMapProvider } from './providers/YandexMapProvider'
-import { YandexMapV2Provider } from './providers/YandexMapV2Provider'
 import type {
   MapPoint,
   MapProvider,
@@ -14,54 +14,51 @@ import type {
 } from './providers/MapProvider'
 
 export type { MapPoint, MapProvider, MapProviderType }
-export { OsmMapProvider, OpenFreeMapProvider, YandexMapProvider, YandexMapV2Provider }
+export { OsmMapProvider, OpenFreeMapProvider }
 
 export interface RouteMapProps {
   points: MapPoint[]
+  highlightedPath?: MapPoint[]
   selectedPoint?: MapPoint | null
   startPoint?: MapPoint
   finishPoint?: MapPoint
   colorByTelemetry?: boolean
+  fadeByRecency?: boolean
   height?: string | number
   provider?: MapProviderType
   onProviderFallback?: (from: string, to: string, reason: string) => void
 }
 
 function createProvider(type: ResolvedMapProviderType): MapProvider {
-  if (type === 'yandex') return new YandexMapProvider(YANDEX_MAPS_API_KEY)
-  if (type === 'yandex-v2') return new YandexMapV2Provider(YANDEX_MAPS_API_KEY)
   if (type === 'maplibre-vector') return new OpenFreeMapProvider()
   return new OsmMapProvider()
 }
 
 function getInitialProvider(provider: MapProviderType): ResolvedMapProviderType {
   if (provider === 'osm') return 'osm'
-  if (provider === 'yandex') return 'yandex'
-  if (provider === 'yandex-v2') return 'yandex-v2'
   return 'maplibre-vector'
 }
 
 const PROVIDER_OPTIONS: { value: ResolvedMapProviderType; label: string }[] = [
   { value: 'maplibre-vector', label: 'Vector' },
   { value: 'osm', label: 'OSM' },
-  { value: 'yandex', label: 'Yandex' },
 ]
 
 function getFallbackProvider(
   active: ResolvedMapProviderType,
 ): ResolvedMapProviderType | null {
   if (active === 'maplibre-vector') return 'osm'
-  if (active === 'yandex') return 'yandex-v2'
-  if (active === 'yandex-v2') return 'osm'
   return null
 }
 
 export function RouteMap({
   points,
+  highlightedPath,
   selectedPoint,
   startPoint,
   finishPoint,
   colorByTelemetry = false,
+  fadeByRecency = false,
   height = '100%',
   provider = 'auto',
   onProviderFallback,
@@ -69,13 +66,16 @@ export function RouteMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const providerRef = useRef<MapProvider | null>(null)
   const fallbackRef = useRef(onProviderFallback)
-  const stateRef = useRef<MapProviderState>({ points, selectedPoint, startPoint, finishPoint, colorByTelemetry })
+  const stateRef = useRef<MapProviderState>({ points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints: false })
   const manualSelectionRef = useRef(false)
   const [activeProvider, setActiveProvider] = useState<ResolvedMapProviderType>(() => getInitialProvider(provider))
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [exporting, setExporting] = useState(false)
+  const [showPoints, setShowPoints] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
 
   fallbackRef.current = onProviderFallback
-  stateRef.current = { points, selectedPoint, startPoint, finishPoint, colorByTelemetry }
+  stateRef.current = { points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints }
 
   useEffect(() => {
     manualSelectionRef.current = false
@@ -137,7 +137,33 @@ export function RouteMap({
     }
   }, [activeProvider, provider])
 
-  useEffect(() => providerRef.current?.update(stateRef.current), [points, selectedPoint, startPoint, finishPoint, colorByTelemetry])
+  useEffect(() => providerRef.current?.update(stateRef.current), [points, highlightedPath, selectedPoint, startPoint, finishPoint, colorByTelemetry, fadeByRecency, showPoints])
+
+  // Exit fullscreen on Escape.
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen])
+
+  const canExport = status === 'ready' && typeof providerRef.current?.exportImage === 'function'
+
+  async function handleExport(background: boolean) {
+    const exportImage = providerRef.current?.exportImage
+    if (!exportImage || exporting) return
+    setExporting(true)
+    try {
+      const blob = await exportImage.call(providerRef.current, { background })
+      const suffix = background ? 'map' : 'trace'
+      downloadBlob(blob, `route-${suffix}-${Date.now()}.png`)
+      toast.success(background ? 'Exported route with map' : 'Exported transparent route')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const isDark = activeProvider === 'maplibre-vector'
   const overlayBg = isDark ? 'bg-[#0a0e14]/85' : 'bg-white/90'
@@ -149,15 +175,18 @@ export function RouteMap({
     : []
   const minSpeed = speeds.length > 0 ? Math.min(...speeds) : 0
   const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0
-  const middleSpeed = (minSpeed + maxSpeed) / 2
+  // Colors are spread by percentile, so the mid-ramp color marks the median
+  // speed (not the arithmetic midpoint).
+  const sortedSpeeds = [...speeds].sort((a, b) => a - b)
+  const middleSpeed = sortedSpeeds.length > 0 ? sortedSpeeds[Math.floor((sortedSpeeds.length - 1) / 2)] : 0
 
   return (
     <div
-      className="relative overflow-hidden"
+      className={`overflow-hidden ${fullscreen ? 'fixed inset-0 z-[60]' : 'relative'}`}
       style={{
-        width: '100%',
-        height,
-        minHeight: height === '100%' ? 320 : undefined,
+        width: fullscreen ? '100vw' : '100%',
+        height: fullscreen ? '100vh' : height,
+        minHeight: !fullscreen && height === '100%' ? 320 : undefined,
         background: isDark ? '#0a0e14' : '#e8ecec',
       }}
     >
@@ -184,23 +213,73 @@ export function RouteMap({
         </span>
       </div>
 
-      <div className={`absolute right-3 top-3 z-20 flex border ${overlayBorder} ${overlayBg} shadow-sm backdrop-blur`}>
-        {PROVIDER_OPTIONS.map(({ value, label }) => (
+      <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
+        <div className={`flex border ${overlayBorder} ${overlayBg} shadow-sm backdrop-blur`}>
+          {PROVIDER_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => { manualSelectionRef.current = true; setActiveProvider(value) }}
+              className={`px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors ${
+                activeProvider === value
+                  ? isDark
+                    ? 'bg-[#39d353]/15 text-[#39d353]'
+                    : 'bg-primary/10 text-primary'
+                  : `${overlayText} hover:opacity-80`
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className={`flex border ${overlayBorder} ${overlayBg} shadow-sm backdrop-blur`}>
           <button
-            key={value}
             type="button"
-            onClick={() => { manualSelectionRef.current = true; setActiveProvider(value) }}
-            className={`px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors ${
-              activeProvider === value
-                ? isDark
-                  ? 'bg-[#39d353]/15 text-[#39d353]'
-                  : 'bg-primary/10 text-primary'
+            onClick={() => setShowPoints(value => !value)}
+            aria-pressed={showPoints}
+            title={showPoints ? 'Hide GPS points' : 'Show GPS points'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors ${
+              showPoints
+                ? isDark ? 'bg-[#39d353]/15 text-[#39d353]' : 'bg-primary/10 text-primary'
                 : `${overlayText} hover:opacity-80`
             }`}
           >
-            {label}
+            <CircleDot className="size-3" /> Points
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => setFullscreen(value => !value)}
+            aria-pressed={fullscreen}
+            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen map'}
+            className={`flex items-center gap-1.5 border-l ${isDark ? 'border-[#1e2c40]/60' : 'border-slate-300'} px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors ${overlayText} hover:opacity-80`}
+          >
+            {fullscreen ? <Minimize2 className="size-3" /> : <Maximize2 className="size-3" />} Full
+          </button>
+        </div>
+
+        {canExport ? (
+          <div className={`flex border ${overlayBorder} ${overlayBg} shadow-sm backdrop-blur`}>
+            <button
+              type="button"
+              onClick={() => handleExport(true)}
+              disabled={exporting}
+              title="Export PNG with map background"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors disabled:opacity-50 ${overlayText} hover:opacity-80`}
+            >
+              <Download className="size-3" /> PNG
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport(false)}
+              disabled={exporting}
+              title="Export transparent PNG (route only, no background)"
+              className={`flex items-center gap-1.5 border-l ${isDark ? 'border-[#1e2c40]/60' : 'border-slate-300'} px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.1em] transition-colors disabled:opacity-50 ${overlayText} hover:opacity-80`}
+            >
+              <ImageOff className="size-3" /> No BG
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className={`absolute bottom-3 left-3 z-20 flex border ${overlayBorder} ${overlayBg} shadow-sm backdrop-blur`}>
@@ -227,7 +306,7 @@ export function RouteMap({
             </div>
             <div
               className="h-2 rounded-full"
-              style={{ background: 'linear-gradient(90deg, hsl(210 88% 54%), hsl(105 88% 54%), hsl(0 88% 54%))' }}
+              style={{ background: SPEED_RAMP_CSS }}
             />
             <div className={`mt-1 flex justify-between font-mono text-[8px] font-bold tabular-nums ${overlayTextBright}`}>
               <span>{minSpeed.toFixed(1)}</span>

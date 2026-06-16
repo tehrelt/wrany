@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import { getValidToken } from '../../api/httpClient';
 import { getOrCreateDeviceId } from '../../tracker/deviceId';
-import { getAccessToken, getRefreshToken } from '../../storage/tokenStorage';
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+} from '../../storage/tokenStorage';
 import { apiUrlToWsUrl, getApiUrl } from '../../storage/settingsStorage';
 import { syncTokensFromNative } from './tokenSync';
 import { trackingModule } from './trackingNativeModule';
@@ -41,7 +45,15 @@ const INITIAL_PERMS: PermissionsStatus = {
   notifications: 'unknown',
 };
 
-export function TrackingStatusScreen(): React.JSX.Element {
+interface Props {
+  // Called when stored credentials are gone/invalid and the user must re-auth.
+  // The parent (App) clears its token state and renders AuthScreen.
+  onLoggedOut: () => void;
+}
+
+export function TrackingStatusScreen({
+  onLoggedOut,
+}: Props): React.JSX.Element {
   const [status, setStatus] = useState<TrackingStatus>(INITIAL_STATUS);
   const [perms, setPerms] = useState<PermissionsStatus>(INITIAL_PERMS);
   const [busy, setBusy] = useState(false);
@@ -204,8 +216,17 @@ export function TrackingStatusScreen(): React.JSX.Element {
       await requestActivityRecognition();
       await checkPermissions();
 
-      if (!(await getAccessToken())) {
-        setError('Not authenticated. Please log in again.');
+      // getValidToken refreshes a missing/expired access token using the
+      // stored refresh token; it only throws AuthExpiredError when refresh
+      // itself is dead. A raw getAccessToken() check here would falsely report
+      // "Not authenticated" whenever the access token expired but refresh works.
+      try {
+        await getValidToken();
+      } catch {
+        // Credentials are gone or unrecoverable — wipe the stale pair and
+        // bounce the user to the auth screen instead of stranding them here.
+        await clearTokens();
+        onLoggedOut();
         return;
       }
       await startNativeTracking();
@@ -246,6 +267,17 @@ export function TrackingStatusScreen(): React.JSX.Element {
   async function handleClearFailed(): Promise<void> {
     await trackingModule.clearFailed();
     await refreshStatus();
+  }
+
+  async function handleRetryFailed(): Promise<void> {
+    setError(null);
+    try {
+      const count = await trackingModule.retryFailed();
+      Alert.alert('Retry failed points', `Requeued ${count} point(s).`);
+      await refreshStatus();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to retry points');
+    }
   }
 
   const bgDenied = perms.backgroundLocation === 'denied';
@@ -317,6 +349,13 @@ export function TrackingStatusScreen(): React.JSX.Element {
             title="Flush now"
             onPress={handleFlush}
             disabled={!status.serviceRunning}
+          />
+        </View>
+        <View style={styles.buttonRow}>
+          <Button
+            title="Retry failed points"
+            onPress={handleRetryFailed}
+            disabled={status.failedCount === 0}
           />
         </View>
         <View style={styles.buttonRow}>

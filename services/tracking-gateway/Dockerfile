@@ -1,45 +1,49 @@
+# syntax=docker/dockerfile:1.7
+
 FROM golang:1.25-alpine AS builder
 WORKDIR /workspace
 
-# --- dependency layer (cached unless go.mod/go.sum change) ---
-COPY go.work go.work.sum ./
-COPY libs/events/go.mod        libs/events/go.mod
-COPY libs/eventbus/go.mod      libs/eventbus/go.mod
-COPY libs/observability/go.mod libs/observability/go.mod
-COPY services/tracking-gateway/go.mod services/tracking-gateway/go.mod
-COPY services/tracking-gateway/go.sum services/tracking-gateway/go.sum
+ARG TARGETOS=linux
+ARG TARGETARCH
+ENV CGO_ENABLED=0 \
+    GOWORK=off
+
+COPY libs/events/go.mod ./libs/events/
+COPY libs/eventbus/go.mod libs/eventbus/go.sum ./libs/eventbus/
+COPY libs/observability/go.mod libs/observability/go.sum ./libs/observability/
+COPY services/tracking-gateway/go.mod services/tracking-gateway/go.sum ./services/tracking-gateway/
 
 WORKDIR /workspace/services/tracking-gateway
-ENV GOWORK=off
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# --- source layer ---
 WORKDIR /workspace
-COPY libs/events        ./libs/events
-COPY libs/eventbus      ./libs/eventbus
+COPY libs/events ./libs/events
+COPY libs/eventbus ./libs/eventbus
 COPY libs/observability ./libs/observability
 COPY services/tracking-gateway ./services/tracking-gateway
 
 WORKDIR /workspace/services/tracking-gateway
-# Regenerate the OpenAPI spec from handler annotations so the served
-# /swagger/doc.json always matches the built binary.
-RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
-RUN "$(go env GOPATH)/bin/swag" init \
-    -g cmd/tracking-gateway/main.go \
-    --outputTypes json,go \
-    --parseDependency \
-    --parseInternal
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/gateway ./cmd/tracking-gateway
-RUN CGO_ENABLED=0 GOOS=linux go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1 \
-    && cp "$(go env GOPATH)/bin/migrate" /out/migrate
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go run github.com/swaggo/swag/cmd/swag@v1.16.6 init \
+      -g cmd/tracking-gateway/main.go \
+      --outputTypes json,go \
+      --parseDependency \
+      --parseInternal \
+    && GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go build \
+      -trimpath -ldflags="-s -w" \
+      -o /out/gateway ./cmd/tracking-gateway \
+    && GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go build \
+      -trimpath -ldflags="-s -w" -tags postgres \
+      -o /out/migrate github.com/golang-migrate/migrate/v4/cmd/migrate
 
-FROM alpine:3.19
-RUN apk add --no-cache curl
+FROM alpine:3.22
 WORKDIR /app
-COPY --from=builder /out/gateway .
-COPY --from=builder /out/migrate .
+RUN apk add --no-cache curl
+COPY --from=builder --chown=65532:65532 /out/gateway /out/migrate ./
 COPY services/tracking-gateway/infra/migrations ./infra/migrations
-COPY services/tracking-gateway/entrypoint.sh .
-RUN sed -i 's/\r//' entrypoint.sh && chmod +x entrypoint.sh
+COPY --chmod=755 services/tracking-gateway/entrypoint.sh ./
+USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["./entrypoint.sh"]

@@ -121,6 +121,26 @@ class TrackingModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    // Requeue failed points (normalising legacy activity_type) and nudge the
+    // service to flush them. Resolves with the number of points requeued.
+    @ReactMethod
+    fun retryFailed(promise: Promise) {
+        scope.launch {
+            try {
+                val count = LocationQueueDatabase.getInstance(reactApplicationContext)
+                    .dao()
+                    .retryFailed(Instant.now().toString())
+                val intent = Intent(reactApplicationContext, TrackingForegroundService::class.java).apply {
+                    action = TrackingForegroundService.ACTION_RECONNECT
+                }
+                reactApplicationContext.startService(intent)
+                promise.resolve(count)
+            } catch (e: Exception) {
+                promise.reject("RETRY_ERROR", e.message ?: "unknown error", e)
+            }
+        }
+    }
+
     @ReactMethod
     fun updateToken(token: String, promise: Promise) {
         reactApplicationContext

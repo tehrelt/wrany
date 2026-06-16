@@ -17,12 +17,42 @@
                 "tags": [
                     "system"
                 ],
-                "summary": "Health check",
+                "summary": "Liveness probe",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.HealthzEnv"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/readyz": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "Readiness probe — checks DB and NATS connectivity",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -628,6 +658,78 @@
                 }
             }
         },
+        "/v1/tracking/fast-segments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tracking"
+                ],
+                "summary": "Rank fastest non-overlapping sections in a time range",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by device UUID",
+                        "name": "device_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of time range (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of time range (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sensitivity: soft, normal, strict",
+                        "name": "preset",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Result count: 5, 10, 20",
+                        "name": "limit",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.FastSegmentsEnv"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ApiError"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/tracking/points": {
             "get": {
                 "security": [
@@ -1111,23 +1213,86 @@
                 }
             }
         },
-        "http.Healthz": {
+        "http.FastSegmentItem": {
             "type": "object",
             "properties": {
-                "status": {
-                    "type": "string",
-                    "example": "ok"
+                "avg_speed_mps": {
+                    "type": "number",
+                    "example": 7.38
+                },
+                "baseline_speed_mps": {
+                    "type": "number",
+                    "example": 3.12
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "number",
+                    "example": 310
+                },
+                "duration_sec": {
+                    "type": "integer",
+                    "example": 42
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.FastSegmentPoint"
+                    }
+                },
+                "rank": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "uplift_percent": {
+                    "type": "number",
+                    "example": 136.5
                 }
             }
         },
-        "http.HealthzEnv": {
+        "http.FastSegmentPoint": {
+            "type": "object",
+            "properties": {
+                "lat": {
+                    "type": "number",
+                    "example": 55.751244
+                },
+                "lon": {
+                    "type": "number",
+                    "example": 37.618423
+                },
+                "recorded_at": {
+                    "type": "string",
+                    "example": "2026-06-10T12:00:01Z"
+                }
+            }
+        },
+        "http.FastSegmentsEnv": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/http.Healthz"
+                    "$ref": "#/definitions/http.FastSegmentsResponse"
                 },
                 "error": {
                     "type": "string"
+                }
+            }
+        },
+        "http.FastSegmentsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.FastSegmentItem"
+                    }
                 }
             }
         },

@@ -99,3 +99,47 @@ export async function getTrack(filter: TrackFilter): Promise<TrackSegment[]> {
   )
   return res.data.data.items ?? []
 }
+
+export type FastSegmentPreset = 'soft' | 'normal' | 'strict'
+export type FastSegmentLimit = 5 | 10 | 20
+
+export interface FastSegmentPoint {
+  lat: number
+  lon: number
+  recorded_at: string
+}
+
+export interface FastSegment {
+  rank: number
+  device_id: string
+  started_at: string
+  ended_at: string
+  duration_sec: number
+  distance_m: number
+  avg_speed_mps: number
+  baseline_speed_mps: number
+  uplift_percent: number
+  points: FastSegmentPoint[]
+}
+
+export interface FastSegmentsFilter {
+  device_id?: string
+  from: string
+  to: string
+  preset: FastSegmentPreset
+  limit: FastSegmentLimit
+}
+
+export async function getFastSegments(filter: FastSegmentsFilter): Promise<FastSegment[]> {
+  const params = new URLSearchParams({
+    from: filter.from,
+    to: filter.to,
+    preset: filter.preset,
+    limit: String(filter.limit),
+  })
+  if (filter.device_id) params.set('device_id', filter.device_id)
+  const res = await apiClient.get<{ data: { items: FastSegment[] }; error: string | null }>(
+    `/v1/tracking/fast-segments?${params}`,
+  )
+  return res.data.data.items ?? []
+}

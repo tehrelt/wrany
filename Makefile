@@ -4,7 +4,8 @@
         migrate-worker-up migrate-worker-down migrate-worker-version \
         swagger-gen swagger-up ts-client web-up web-build \
         observability-up observability-down observability-logs \
-        prometheus-check grafana-check loki-check
+        prometheus-check grafana-check loki-check \
+        android-install android-install-debug android-devices
 
 up:
 	docker compose up -d --build
@@ -135,3 +136,21 @@ ts-client:
 	cd apps/web && ORVAL_INPUT=../../services/tracking-gateway/docs/swagger.json \
 		npx orval --config orval.config.local.ts
 	@echo "Generated: apps/web/src/api/generated/schema.d.ts"
+
+# ── Android tracker ─────────────────────────────────────────────────────────────
+
+ANDROID_DIR := apps/android-tracker/android
+# Target device serial. Override: make android-install DEVICE=<serial>
+DEVICE ?= 2B171FDH20069Y
+
+# Build and install the release APK onto $(DEVICE).
+android-install:
+	cd $(ANDROID_DIR) && ANDROID_SERIAL=$(DEVICE) ./gradlew installRelease
+
+# Build and install the debug APK onto $(DEVICE).
+android-install-debug:
+	cd $(ANDROID_DIR) && ANDROID_SERIAL=$(DEVICE) ./gradlew installDebug
+
+# List attached adb devices.
+android-devices:
+	adb devices -l
