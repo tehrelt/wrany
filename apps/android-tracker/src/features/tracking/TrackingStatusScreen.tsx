@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import { getValidToken } from '../../api/httpClient';
 import { getOrCreateDeviceId } from '../../tracker/deviceId';
-import { getAccessToken, getRefreshToken } from '../../storage/tokenStorage';
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+} from '../../storage/tokenStorage';
 import { apiUrlToWsUrl, getApiUrl } from '../../storage/settingsStorage';
 import { syncTokensFromNative } from './tokenSync';
 import { trackingModule } from './trackingNativeModule';
@@ -41,7 +45,13 @@ const INITIAL_PERMS: PermissionsStatus = {
   notifications: 'unknown',
 };
 
-export function TrackingStatusScreen(): React.JSX.Element {
+interface Props {
+  // Called when stored credentials are gone/invalid and the user must re-auth.
+  // The parent (App) clears its token state and renders AuthScreen.
+  onLoggedOut: () => void;
+}
+
+export function TrackingStatusScreen({ onLoggedOut }: Props): React.JSX.Element {
   const [status, setStatus] = useState<TrackingStatus>(INITIAL_STATUS);
   const [perms, setPerms] = useState<PermissionsStatus>(INITIAL_PERMS);
   const [busy, setBusy] = useState(false);
@@ -211,7 +221,10 @@ export function TrackingStatusScreen(): React.JSX.Element {
       try {
         await getValidToken();
       } catch {
-        setError('Not authenticated. Please log in again.');
+        // Credentials are gone or unrecoverable — wipe the stale pair and
+        // bounce the user to the auth screen instead of stranding them here.
+        await clearTokens();
+        onLoggedOut();
         return;
       }
       await startNativeTracking();

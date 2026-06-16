@@ -63,7 +63,9 @@ export function App(): React.JSX.Element {
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
-          {tab === 'background' && <TrackingStatusScreen />}
+          {tab === 'background' && (
+            <TrackingStatusScreen onLoggedOut={() => setToken(null)} />
+          )}
           {tab === 'settings' && <SettingsScreen />}
         </View>
       </SafeAreaView>
