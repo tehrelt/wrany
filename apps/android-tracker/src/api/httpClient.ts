@@ -6,6 +6,7 @@ import {
   saveTokens,
 } from '../storage/tokenStorage';
 import { syncTokensToNative } from '../features/tracking/tokenSync';
+import { isExpiredOrExpiring } from './jwt';
 
 interface ApiResponse<T> {
   data: T | null;
@@ -63,21 +64,6 @@ async function refreshOnce(): Promise<string> {
     });
   }
   return refreshInFlight;
-}
-
-function isExpiredOrExpiring(token: string, bufferSec = 60): boolean {
-  try {
-    // atob is available in React Native (Hermes/JSC) but not in TS dom typings.
-    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    // eslint-disable-next-line no-restricted-globals
-    const decoded = (globalThis as unknown as { atob(s: string): string }).atob(
-      b64,
-    );
-    const payload = JSON.parse(decoded) as { exp?: number };
-    return (payload.exp ?? 0) - Date.now() / 1000 < bufferSec;
-  } catch {
-    return true;
-  }
 }
 
 // Returns a guaranteed-valid access token, refreshing proactively if the
