@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS processed_location_points (
     is_stationary BOOLEAN NOT NULL,
     noise_reason TEXT NOT NULL DEFAULT '',
     recorded_at TIMESTAMPTZ NOT NULL,
+    activity_type TEXT NOT NULL DEFAULT 'unknown',
     PRIMARY KEY (user_id, device_id, event_id)
 );`
 
@@ -277,8 +278,8 @@ func TestTrackingQueryRepo_GetTrack_UsesProcessedPointsAndSegmentBreaks(t *testi
 		_, err = db.Exec(ctx, `
 			INSERT INTO processed_location_points
 				(user_id, device_id, event_id, filtered_lat, filtered_lon, accuracy_m,
-				 speed_mps, is_accepted, is_stationary, noise_reason, recorded_at)
-			VALUES ($1, $1, $2, $3, $4, 5, 1.2, true, false, $5, $6)`,
+				 speed_mps, is_accepted, is_stationary, noise_reason, recorded_at, activity_type)
+			VALUES ($1, $1, $2, $3, $4, 5, 1.2, true, false, $5, $6, 'walking')`,
 			userID, "move-"+string(rune('0'+i)), 55.001+float64(i)*0.0001,
 			37.001+float64(i)*0.0001, reason, recordedAt,
 		)
@@ -298,4 +299,8 @@ func TestTrackingQueryRepo_GetTrack_UsesProcessedPointsAndSegmentBreaks(t *testi
 	assert.NotEqual(t, segments[0].SegmentID, segments[1].SegmentID)
 	assert.Equal(t, domain.TrackSegmentMove, segments[1].Kind)
 	assert.Equal(t, segments[1].SegmentID, segments[2].SegmentID)
+	// activity flows through: stay defaults to the modal 'unknown', move carries 'walking'.
+	assert.Equal(t, "unknown", segments[0].ActivityType)
+	assert.Equal(t, "walking", segments[1].ActivityType)
+	assert.Equal(t, "walking", segments[2].ActivityType)
 }

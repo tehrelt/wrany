@@ -147,6 +147,7 @@ type TrackSegmentItem struct {
 	AccuracyM       *float64 `json:"accuracy_m"`
 	StayDurationSec int      `json:"stay_duration_sec" example:"9000"`
 	MergedCount     int      `json:"merged_count"      example:"180"`
+	ActivityType    string   `json:"activity_type"     example:"walking"`
 }
 
 // TrackResponse is the data payload for GET /v1/tracking/track.

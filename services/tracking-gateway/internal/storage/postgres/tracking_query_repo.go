@@ -147,7 +147,8 @@ func (r *TrackingQueryRepo) GetTrack(
 				filtered_lat AS lat, filtered_lon AS lon,
 				speed_mps, accuracy_m,
 				(is_stationary OR COALESCE(speed_mps, 0) < $4) AS is_stationary,
-				noise_reason
+				noise_reason,
+				COALESCE(NULLIF(activity_type, ''), 'unknown') AS activity_type
 			FROM processed_location_points
 			WHERE user_id = $1
 				AND recorded_at >= $2 AND recorded_at <= $3
@@ -230,7 +231,8 @@ func (r *TrackingQueryRepo) GetTrack(
 			AVG(lat) AS lat, AVG(lon) AS lon,
 			NULL::float8 AS speed_mps, NULL::float8 AS accuracy_m,
 			EXTRACT(EPOCH FROM (MAX(recorded_at) - MIN(recorded_at)))::int AS stay_duration_sec,
-			COUNT(*)::int AS merged_count
+			COUNT(*)::int AS merged_count,
+			mode() WITHIN GROUP (ORDER BY activity_type) AS activity_type
 		FROM final_groups
 		WHERE is_stationary2
 		GROUP BY device_id, device_segment, segment_id, final_group
@@ -244,7 +246,8 @@ func (r *TrackingQueryRepo) GetTrack(
 			g.lat, g.lon,
 			g.speed_mps, g.accuracy_m,
 			0::int AS stay_duration_sec,
-			1::int AS merged_count
+			1::int AS merged_count,
+			g.activity_type
 		FROM final_groups g
 		JOIN final_durations d USING (device_id, device_segment, final_group)
 		WHERE NOT g.is_stationary2 OR d.dur_sec < $` + minStayArg + `
@@ -268,6 +271,7 @@ func (r *TrackingQueryRepo) GetTrack(
 			&s.Lat, &s.Lon,
 			&s.SpeedMps, &s.AccuracyM,
 			&s.StayDurationSec, &s.MergedCount,
+			&s.ActivityType,
 		); err != nil {
 			return nil, err
 		}

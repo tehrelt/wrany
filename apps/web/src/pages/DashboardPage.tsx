@@ -119,6 +119,7 @@ export function DashboardPage({ onLogout }: Props) {
     accuracyM: segment.accuracy_m,
     kind: segment.kind,
     eventId: segment.event_id,
+    activityType: segment.activity_type,
   })), [segments])
   const highlightedPath = useMemo(() => activeFastSegment?.points.map(point => ({
     lat: point.lat,
