@@ -5,13 +5,20 @@ import com.google.android.gms.location.DetectedActivity
 /** Coarse local motion state. Backend remains the source of truth for trips. */
 enum class MotionState { IDLE, MOTION_CANDIDATE, MOVING, STOP_CANDIDATE }
 
-/** Activity classes we react to, mapped from Google's DetectedActivity. */
+/**
+ * Activity classes we react to, mapped from Google's DetectedActivity.
+ *
+ * `wire` MUST match the backend's accepted activity_type contract
+ * (libs/events + tracking-gateway domain.ValidActivityTypes):
+ * walking / running / bicycle / vehicle / stationary / unknown.
+ * Any other value is rejected server-side as invalid_activity_type.
+ */
 enum class MotionActivity(val wire: String) {
-    STILL("still"),
+    STILL("stationary"),
     WALKING("walking"),
     RUNNING("running"),
-    ON_BICYCLE("on_bicycle"),
-    IN_VEHICLE("in_vehicle"),
+    ON_BICYCLE("bicycle"),
+    IN_VEHICLE("vehicle"),
     UNKNOWN("unknown");
 
     val isMotion: Boolean

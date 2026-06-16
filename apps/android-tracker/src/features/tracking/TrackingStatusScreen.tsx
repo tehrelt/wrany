@@ -269,6 +269,17 @@ export function TrackingStatusScreen({
     await refreshStatus();
   }
 
+  async function handleRetryFailed(): Promise<void> {
+    setError(null);
+    try {
+      const count = await trackingModule.retryFailed();
+      Alert.alert('Retry failed points', `Requeued ${count} point(s).`);
+      await refreshStatus();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to retry points');
+    }
+  }
+
   const bgDenied = perms.backgroundLocation === 'denied';
 
   return (
@@ -338,6 +349,13 @@ export function TrackingStatusScreen({
             title="Flush now"
             onPress={handleFlush}
             disabled={!status.serviceRunning}
+          />
+        </View>
+        <View style={styles.buttonRow}>
+          <Button
+            title="Retry failed points"
+            onPress={handleRetryFailed}
+            disabled={status.failedCount === 0}
           />
         </View>
         <View style={styles.buttonRow}>

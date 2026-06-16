@@ -15,6 +15,7 @@ const { TrackingModule } = NativeModules as {
     reconnectWs(): Promise<void>;
     flushNow(): Promise<void>;
     clearFailed(): Promise<void>;
+    retryFailed(): Promise<number>;
     updateToken(token: string): Promise<void>;
     updateTokens(accessToken: string, refreshToken: string): Promise<void>;
     getStoredTokens(): Promise<{
