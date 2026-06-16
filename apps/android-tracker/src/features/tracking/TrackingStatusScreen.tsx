@@ -51,7 +51,9 @@ interface Props {
   onLoggedOut: () => void;
 }
 
-export function TrackingStatusScreen({ onLoggedOut }: Props): React.JSX.Element {
+export function TrackingStatusScreen({
+  onLoggedOut,
+}: Props): React.JSX.Element {
   const [status, setStatus] = useState<TrackingStatus>(INITIAL_STATUS);
   const [perms, setPerms] = useState<PermissionsStatus>(INITIAL_PERMS);
   const [busy, setBusy] = useState(false);

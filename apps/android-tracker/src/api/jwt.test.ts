@@ -1,4 +1,4 @@
-import { base64UrlDecode, isExpiredOrExpiring } from './jwt';
+import { base64UrlDecode, getTokenExp, isExpiredOrExpiring } from './jwt';
 
 // Buffer exists in the Jest (Node) runtime; declare it to satisfy the
 // React Native tsconfig, which does not pull in @types/node.
@@ -26,6 +26,20 @@ describe('base64UrlDecode', () => {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
     expect(base64UrlDecode(b64url)).toBe(json);
+  });
+});
+
+describe('getTokenExp', () => {
+  it('extracts the exp claim', () => {
+    expect(getTokenExp(makeJwt({ exp: 1781701939 }))).toBe(1781701939);
+  });
+
+  it('returns 0 for a malformed token', () => {
+    expect(getTokenExp('garbage')).toBe(0);
+  });
+
+  it('returns 0 when exp is absent', () => {
+    expect(getTokenExp(makeJwt({ sub: 'x' }))).toBe(0);
   });
 });
 

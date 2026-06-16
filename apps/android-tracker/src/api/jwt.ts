@@ -24,14 +24,19 @@ export function base64UrlDecode(input: string): string {
   return output;
 }
 
-// Returns true if the JWT is missing, unparsable, or expires within bufferSec.
-export function isExpiredOrExpiring(token: string, bufferSec = 60): boolean {
+// Returns the JWT `exp` (seconds since epoch), or 0 if missing/unparsable.
+export function getTokenExp(token: string): number {
   try {
     const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return true;
+    if (!payloadB64) return 0;
     const payload = JSON.parse(base64UrlDecode(payloadB64)) as { exp?: number };
-    return (payload.exp ?? 0) - Date.now() / 1000 < bufferSec;
+    return payload.exp ?? 0;
   } catch {
-    return true;
+    return 0;
   }
+}
+
+// Returns true if the JWT is missing, unparsable, or expires within bufferSec.
+export function isExpiredOrExpiring(token: string, bufferSec = 60): boolean {
+  return getTokenExp(token) - Date.now() / 1000 < bufferSec;
 }
