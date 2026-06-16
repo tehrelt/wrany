@@ -77,6 +77,7 @@ export interface TrackSegment {
   accuracy_m: number | null
   stay_duration_sec: number
   merged_count: number
+  activity_type: string
 }
 
 export interface TrackFilter {

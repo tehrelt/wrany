@@ -15,6 +15,7 @@ function move(segmentId: number, eventId: string, lat: number): TrackSegment {
     accuracy_m: 5,
     stay_duration_sec: 0,
     merged_count: 1,
+    activity_type: 'walking',
   }
 }
 

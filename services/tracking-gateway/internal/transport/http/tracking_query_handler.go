@@ -278,6 +278,7 @@ func (h *TrackingQueryHandler) GetTrack(w http.ResponseWriter, r *http.Request) 
 			AccuracyM:       s.AccuracyM,
 			StayDurationSec: s.StayDurationSec,
 			MergedCount:     s.MergedCount,
+			ActivityType:    s.ActivityType,
 		})
 	}
 

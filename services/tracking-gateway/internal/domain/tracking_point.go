@@ -66,8 +66,9 @@ type TrackSegment struct {
 	Lon             float64
 	SpeedMps        *float64
 	AccuracyM       *float64
-	StayDurationSec int // seconds; 0 for move segments
-	MergedCount     int // raw points merged; 1 for move segments
+	StayDurationSec int    // seconds; 0 for move segments
+	MergedCount     int    // raw points merged; 1 for move segments
+	ActivityType    string // move: the point's activity; stay: modal activity
 }
 
 type FastSegmentPreset string

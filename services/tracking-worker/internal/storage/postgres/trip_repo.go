@@ -470,7 +470,8 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			raw_lat, raw_lon, filtered_lat, filtered_lon, filtered_geom,
 			accuracy_m, speed_mps, implied_speed_mps, distance_delta_m,
 			is_accepted, is_outlier, is_stationary, noise_reason, stationary_since,
-			recorded_at, received_at, processed_at, algorithm_version
+			recorded_at, received_at, processed_at, algorithm_version,
+			activity_type, activity_confidence
 		) VALUES (
 			$1, $2, $3,
 			$4, $5, $6, $7,
@@ -480,7 +481,8 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			END,
 			$8, $9, $10, $11,
 			$12, $13, $14, $15, $16,
-			$17, $18, $19, $20
+			$17, $18, $19, $20,
+			$21, $22
 		) ON CONFLICT (user_id, device_id, event_id) DO NOTHING`
 	for _, point := range points {
 		if _, err := tx.Exec(ctx, q,
@@ -490,11 +492,21 @@ func insertProcessedPoints(ctx context.Context, tx pgx.Tx, points []domain.Proce
 			point.IsAccepted, point.IsOutlier, point.IsStationary, string(point.NoiseReason),
 			point.StationarySince,
 			point.RecordedAt, point.ReceivedAt, point.ProcessedAt, point.AlgorithmVersion,
+			activityTypeOrUnknown(point.ActivityType), point.ActivityConfidence,
 		); err != nil {
 			return fmt.Errorf("trip_repo: insert processed point %s: %w", point.EventID, err)
 		}
 	}
 	return nil
+}
+
+// activityTypeOrUnknown guards the NOT NULL activity_type column: an empty
+// classification is stored as "unknown" (the backend's accepted default).
+func activityTypeOrUnknown(at string) string {
+	if at == "" {
+		return "unknown"
+	}
+	return at
 }
 
 // FetchPointsForReprocessing returns raw points in [from, to) for a pair whose
@@ -567,7 +579,8 @@ func (r *TripRepo) UpsertProcessedPoints(ctx context.Context, points []domain.Pr
 			raw_lat, raw_lon, filtered_lat, filtered_lon, filtered_geom,
 			accuracy_m, speed_mps, implied_speed_mps, distance_delta_m,
 			is_accepted, is_outlier, is_stationary, noise_reason, stationary_since,
-			recorded_at, received_at, processed_at, algorithm_version
+			recorded_at, received_at, processed_at, algorithm_version,
+			activity_type, activity_confidence
 		) VALUES (
 			$1, $2, $3,
 			$4, $5, $6, $7,
@@ -577,21 +590,24 @@ func (r *TripRepo) UpsertProcessedPoints(ctx context.Context, points []domain.Pr
 			END,
 			$8, $9, $10, $11,
 			$12, $13, $14, $15, $16,
-			$17, $18, $19, $20
+			$17, $18, $19, $20,
+			$21, $22
 		)
 		ON CONFLICT (user_id, device_id, event_id) DO UPDATE SET
-			filtered_lat      = EXCLUDED.filtered_lat,
-			filtered_lon      = EXCLUDED.filtered_lon,
-			filtered_geom     = EXCLUDED.filtered_geom,
-			implied_speed_mps = EXCLUDED.implied_speed_mps,
-			distance_delta_m  = EXCLUDED.distance_delta_m,
-			is_accepted       = EXCLUDED.is_accepted,
-			is_outlier        = EXCLUDED.is_outlier,
-			is_stationary     = EXCLUDED.is_stationary,
-			noise_reason      = EXCLUDED.noise_reason,
-			stationary_since  = EXCLUDED.stationary_since,
-			processed_at      = EXCLUDED.processed_at,
-			algorithm_version = EXCLUDED.algorithm_version
+			filtered_lat        = EXCLUDED.filtered_lat,
+			filtered_lon        = EXCLUDED.filtered_lon,
+			filtered_geom       = EXCLUDED.filtered_geom,
+			implied_speed_mps   = EXCLUDED.implied_speed_mps,
+			distance_delta_m    = EXCLUDED.distance_delta_m,
+			is_accepted         = EXCLUDED.is_accepted,
+			is_outlier          = EXCLUDED.is_outlier,
+			is_stationary       = EXCLUDED.is_stationary,
+			noise_reason        = EXCLUDED.noise_reason,
+			stationary_since    = EXCLUDED.stationary_since,
+			processed_at        = EXCLUDED.processed_at,
+			algorithm_version   = EXCLUDED.algorithm_version,
+			activity_type       = EXCLUDED.activity_type,
+			activity_confidence = EXCLUDED.activity_confidence
 		WHERE processed_location_points.algorithm_version < EXCLUDED.algorithm_version`
 	for _, point := range points {
 		if _, err := r.db.Exec(ctx, q,
@@ -601,6 +617,7 @@ func (r *TripRepo) UpsertProcessedPoints(ctx context.Context, points []domain.Pr
 			point.IsAccepted, point.IsOutlier, point.IsStationary, string(point.NoiseReason),
 			point.StationarySince,
 			point.RecordedAt, point.ReceivedAt, point.ProcessedAt, point.AlgorithmVersion,
+			activityTypeOrUnknown(point.ActivityType), point.ActivityConfidence,
 		); err != nil {
 			return fmt.Errorf("trip_repo: upsert processed point %s: %w", point.EventID, err)
 		}
